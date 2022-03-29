@@ -1,7 +1,7 @@
 package memdb
 
 import (
-	"memdb/internal/utils"
+	"github.com/lxzan/memorycache/internal/utils"
 	"sort"
 	"testing"
 	"time"

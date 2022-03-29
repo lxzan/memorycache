@@ -1,52 +1,49 @@
 package memdb
 
 import (
+	"github.com/lxzan/memorycache/internal/heap"
+	"github.com/lxzan/memorycache/internal/utils"
 	"math/rand"
-	"memdb/internal/heap"
-	"memdb/internal/utils"
 	"sync"
 	"time"
 	"unsafe"
 )
 
-const (
-	expireCheckInterval = 10  // 过期时间检查间隔, 秒
-	expireCheckNum      = 100 // 每次过期检查清除数据量
-)
-
 type concurrent_hashmap struct {
-	segment uint32
+	cfg     Config
 	buckets []bucket
 }
 
-func newConcurrentHashmap(segment uint32) *concurrent_hashmap {
+func newConcurrentHashmap(cfg Config) *concurrent_hashmap {
 	var m = &concurrent_hashmap{
-		segment: segment,
-		buckets: make([]bucket, segment),
+		cfg:     cfg,
+		buckets: make([]bucket, cfg.Segment),
 	}
 	for i, _ := range m.buckets {
 		m.buckets[i] = bucket{
-			ttl:  make([]heap.Element, 0),
-			data: make(map[string]element),
+			clear_count: cfg.ClearKeysCount,
+			ttl:         make([]heap.Element, 0),
+			data:        make(map[string]element),
 		}
 	}
 	for i, _ := range m.buckets {
-		var d = expireCheckInterval + rand.Intn(expireCheckInterval/2)
+		var d = cfg.TTLCheckInterval + rand.Intn(cfg.TTLCheckInterval)
 		go m.buckets[i].expireCheck(time.Duration(d) * time.Second)
 	}
 	return m
 }
 
-func (self concurrent_hashmap) getBucket(key string) *bucket {
-	var k = *(*[]byte)(unsafe.Pointer(&key))
-	var idx = utils.NewFnv32(k) % self.segment
+func (self concurrent_hashmap) getBucket(key *string) *bucket {
+	var k = *(*[]byte)(unsafe.Pointer(key))
+	var idx = utils.NewFnv32(k) & (self.cfg.Segment - 1)
 	return &self.buckets[idx]
 }
 
 type bucket struct {
 	sync.RWMutex
-	data map[string]element
-	ttl  heap.Heap
+	data        map[string]element
+	ttl         heap.Heap
+	clear_count uint32
 }
 
 // 过期时间检查
@@ -57,10 +54,10 @@ func (self *bucket) expireCheck(d time.Duration) {
 		<-ticker.C
 
 		self.Lock()
-		var num = 0
+		var num uint32 = 0
 		var ts = time.Now().UnixMilli()
 		for self.ttl.Len() > 0 {
-			if num >= expireCheckNum || self.ttl[0].ExpireAt > ts {
+			if num >= self.clear_count || self.ttl[0].ExpireAt > ts {
 				break
 			}
 
