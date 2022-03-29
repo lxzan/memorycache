@@ -1,4 +1,4 @@
-package memdb
+package memorycache
 
 import (
 	"github.com/lxzan/memorycache/internal/heap"
@@ -137,4 +137,19 @@ func (self *MemoryCache) Keys() []string {
 		bucket.RUnlock()
 	}
 	return arr
+}
+
+func (self *MemoryCache) Len() int {
+	var num = 0
+	for i, _ := range self.storage.buckets {
+		var bucket = &self.storage.buckets[i]
+		bucket.RLock()
+		for _, v := range bucket.data {
+			if self.valid(v.ExpireAt) {
+				num++
+			}
+		}
+		bucket.RUnlock()
+	}
+	return num
 }

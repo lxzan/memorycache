@@ -1,4 +1,4 @@
-package memdb
+package memorycache
 
 import (
 	"github.com/lxzan/memorycache/internal/utils"
