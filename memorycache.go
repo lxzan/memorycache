@@ -64,18 +64,18 @@ func (self *MemoryCache) valid(ts int64) bool {
 	return ts == -1 || ts > time.Now().UnixMilli()
 }
 
-func (self *MemoryCache) getExpire(expire ...time.Duration) int64 {
-	if len(expire) == 0 || expire[0] < 0 {
+func (self *MemoryCache) getExpireTimestamp(ttl ...time.Duration) int64 {
+	if len(ttl) == 0 || ttl[0] <= 0 {
 		return -1
 	}
-	return time.Now().Add(expire[0]).UnixMilli()
+	return time.Now().Add(ttl[0]).UnixMilli()
 }
 
-// empty exp means forever
-func (self *MemoryCache) Set(key string, value interface{}, expire ...time.Duration) {
+// ttl: -1 means forever
+func (self *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
 	var ele = element{
 		Value:    value,
-		ExpireAt: self.getExpire(expire...),
+		ExpireAt: self.getExpireTimestamp(ttl),
 	}
 
 	var bucket = self.storage.getBucket(&key)
@@ -108,11 +108,11 @@ func (self *MemoryCache) Delete(key string) {
 	bucket.Unlock()
 }
 
-func (self *MemoryCache) Expire(key string, d time.Duration) {
+func (self *MemoryCache) Expire(key string, ttl time.Duration) {
 	var bucket = self.storage.getBucket(&key)
 	bucket.Lock()
 	if result, exist := bucket.data[key]; exist && self.valid(result.ExpireAt) {
-		result.ExpireAt = self.getExpire(d)
+		result.ExpireAt = self.getExpireTimestamp(ttl)
 		bucket.data[key] = result
 		if result.ExpireAt != -1 {
 			bucket.ttl.Push(heap.Element{

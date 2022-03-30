@@ -51,7 +51,7 @@ func BenchmarkGet(b *testing.B) {
 		Segment: 128,
 	})
 	for j := 0; j < benchcount; j++ {
-		mc.Set(benchkeys[j], 1)
+		mc.Set(benchkeys[j], 1, -1)
 	}
 
 	for i := 0; i < b.N; i++ {
