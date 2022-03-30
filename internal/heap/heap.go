@@ -17,11 +17,9 @@ func (self *Heap) Swap(i, j int) {
 	(*self)[i], (*self)[j] = (*self)[j], (*self)[i]
 }
 
-func (self *Heap) Push(eles ...Element) {
-	for _, item := range eles {
-		*self = append(*self, item)
-		self.Up(self.Len() - 1)
-	}
+func (self *Heap) Push(item Element) {
+	*self = append(*self, item)
+	self.Up(self.Len() - 1)
 }
 
 func (self *Heap) Up(i int) {

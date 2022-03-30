@@ -21,7 +21,7 @@ func newConcurrentHashmap(cfg Config) *concurrent_hashmap {
 	}
 	for i, _ := range m.buckets {
 		m.buckets[i] = bucket{
-			clear_count: cfg.ClearKeysCount,
+			clear_count: cfg.ClearPerCheck,
 			ttl:         make([]heap.Element, 0),
 			data:        make(map[string]element),
 		}

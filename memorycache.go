@@ -8,7 +8,7 @@ import (
 type (
 	Config struct {
 		TTLCheckInterval int    // second
-		ClearKeysCount   uint32 // clear keys per check
+		ClearPerCheck    uint32 // clear keys per check
 		Segment          uint32 // bucket segments, segment=2^n
 	}
 
@@ -22,16 +22,17 @@ type (
 	}
 )
 
-func (self *Config) initialize() {
-	if self.Segment == 0 {
+func (self *Config) initialize() *Config {
+	if self.Segment <= 0 {
 		self.Segment = 16
 	}
 	if self.TTLCheckInterval == 0 {
-		self.TTLCheckInterval = 10
+		self.TTLCheckInterval = 30
 	}
-	if self.ClearKeysCount == 0 {
-		self.ClearKeysCount = 100
+	if self.ClearPerCheck == 0 {
+		self.ClearPerCheck = 100
 	}
+	return self
 }
 
 func (self Config) checkSegment() {
@@ -53,8 +54,7 @@ func New(config ...Config) *MemoryCache {
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	cfg.initialize()
-	cfg.checkSegment()
+	cfg.initialize().checkSegment()
 	return &MemoryCache{
 		storage: newConcurrentHashmap(cfg),
 	}
@@ -64,18 +64,18 @@ func (self *MemoryCache) valid(ts int64) bool {
 	return ts == -1 || ts > time.Now().UnixMilli()
 }
 
-func (self *MemoryCache) getExp(exp ...time.Duration) int64 {
-	if len(exp) == 0 || exp[0] < 0 {
+func (self *MemoryCache) getExpire(expire ...time.Duration) int64 {
+	if len(expire) == 0 || expire[0] < 0 {
 		return -1
 	}
-	return time.Now().Add(exp[0]).UnixMilli()
+	return time.Now().Add(expire[0]).UnixMilli()
 }
 
 // empty exp means forever
 func (self *MemoryCache) Set(key string, value interface{}, expire ...time.Duration) {
 	var ele = element{
 		Value:    value,
-		ExpireAt: self.getExp(expire...),
+		ExpireAt: self.getExpire(expire...),
 	}
 
 	var bucket = self.storage.getBucket(&key)
@@ -112,7 +112,7 @@ func (self *MemoryCache) Expire(key string, d time.Duration) {
 	var bucket = self.storage.getBucket(&key)
 	bucket.Lock()
 	if result, exist := bucket.data[key]; exist && self.valid(result.ExpireAt) {
-		result.ExpireAt = self.getExp(d)
+		result.ExpireAt = self.getExpire(d)
 		bucket.data[key] = result
 		if result.ExpireAt != -1 {
 			bucket.ttl.Push(heap.Element{
