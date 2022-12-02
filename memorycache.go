@@ -2,13 +2,13 @@ package memorycache
 
 import (
 	"github.com/lxzan/memorycache/internal/heap"
+	"github.com/lxzan/memorycache/internal/utils"
 	"time"
 )
 
 type (
 	Config struct {
 		TTLCheckInterval int    // second
-		ClearPerCheck    uint32 // clear keys per check
 		Segment          uint32 // bucket segments, segment=2^n
 	}
 
@@ -22,28 +22,22 @@ type (
 	}
 )
 
-func (self *Config) initialize() *Config {
-	if self.Segment <= 0 {
-		self.Segment = 16
+func (c *Config) initialize() *Config {
+	if c.Segment <= 0 {
+		c.Segment = 16
 	}
-	if self.TTLCheckInterval == 0 {
-		self.TTLCheckInterval = 30
+	if c.TTLCheckInterval == 0 {
+		c.TTLCheckInterval = 30
 	}
-	if self.ClearPerCheck == 0 {
-		self.ClearPerCheck = 100
-	}
-	return self
+	return c
 }
 
-func (self Config) checkSegment() {
-	var segment = self.Segment
+func (c *Config) checkSegment() {
+	var segment = c.Segment
 	var msg = "segment=2^n"
-	if segment <= 1 {
-		panic(msg)
-	}
 	for segment > 1 {
 		if segment%2 != 0 {
-			panic(segment)
+			panic(msg)
 		}
 		segment /= 2
 	}
@@ -60,25 +54,25 @@ func New(config ...Config) *MemoryCache {
 	}
 }
 
-func (self *MemoryCache) valid(ts int64) bool {
-	return ts == -1 || ts > time.Now().UnixMilli()
+func (c *MemoryCache) valid(ts int64) bool {
+	return ts == -1 || ts > utils.Timestamp()
 }
 
-func (self *MemoryCache) getExpireTimestamp(ttl ...time.Duration) int64 {
+func (c *MemoryCache) getExpireTimestamp(ttl ...time.Duration) int64 {
 	if len(ttl) == 0 || ttl[0] <= 0 {
 		return -1
 	}
-	return time.Now().Add(ttl[0]).UnixMilli()
+	return time.Now().Add(ttl[0]).UnixNano() / 1000000
 }
 
 // ttl: -1 means forever
-func (self *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
+func (c *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
 	var ele = element{
 		Value:    value,
-		ExpireAt: self.getExpireTimestamp(ttl),
+		ExpireAt: c.getExpireTimestamp(ttl),
 	}
 
-	var bucket = self.storage.getBucket(&key)
+	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
 	bucket.data[key] = ele
 	if ele.ExpireAt != -1 {
@@ -90,29 +84,29 @@ func (self *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
 	bucket.Unlock()
 }
 
-func (self *MemoryCache) Get(key string) (interface{}, bool) {
-	var bucket = self.storage.getBucket(&key)
+func (c *MemoryCache) Get(key string) (interface{}, bool) {
+	var bucket = c.storage.getBucket(key)
 	bucket.RLock()
 	defer bucket.RUnlock()
 	result, exist := bucket.data[key]
-	if !exist || !self.valid(result.ExpireAt) {
+	if !exist || !c.valid(result.ExpireAt) {
 		return nil, false
 	}
 	return result.Value, true
 }
 
-func (self *MemoryCache) Delete(key string) {
-	var bucket = self.storage.getBucket(&key)
+func (c *MemoryCache) Delete(key string) {
+	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
 	delete(bucket.data, key)
 	bucket.Unlock()
 }
 
-func (self *MemoryCache) Expire(key string, ttl time.Duration) {
-	var bucket = self.storage.getBucket(&key)
+func (c *MemoryCache) Expire(key string, ttl time.Duration) {
+	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
-	if result, exist := bucket.data[key]; exist && self.valid(result.ExpireAt) {
-		result.ExpireAt = self.getExpireTimestamp(ttl)
+	if result, exist := bucket.data[key]; exist && c.valid(result.ExpireAt) {
+		result.ExpireAt = c.getExpireTimestamp(ttl)
 		bucket.data[key] = result
 		if result.ExpireAt != -1 {
 			bucket.ttl.Push(heap.Element{
@@ -124,13 +118,13 @@ func (self *MemoryCache) Expire(key string, ttl time.Duration) {
 	bucket.Unlock()
 }
 
-func (self *MemoryCache) Keys() []string {
+func (c *MemoryCache) Keys() []string {
 	var arr = make([]string, 0)
-	for i, _ := range self.storage.buckets {
-		var bucket = &self.storage.buckets[i]
+	for i, _ := range c.storage.buckets {
+		var bucket = &c.storage.buckets[i]
 		bucket.RLock()
 		for k, v := range bucket.data {
-			if self.valid(v.ExpireAt) {
+			if c.valid(v.ExpireAt) {
 				arr = append(arr, k)
 			}
 		}
@@ -139,13 +133,13 @@ func (self *MemoryCache) Keys() []string {
 	return arr
 }
 
-func (self *MemoryCache) Len() int {
+func (c *MemoryCache) Len() int {
 	var num = 0
-	for i, _ := range self.storage.buckets {
-		var bucket = &self.storage.buckets[i]
+	for i, _ := range c.storage.buckets {
+		var bucket = &c.storage.buckets[i]
 		bucket.RLock()
 		for _, v := range bucket.data {
-			if self.valid(v.ExpireAt) {
+			if c.valid(v.ExpireAt) {
 				num++
 			}
 		}
