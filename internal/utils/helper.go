@@ -39,3 +39,7 @@ func SameStrings(arr1, arr2 []string) bool {
 	}
 	return true
 }
+
+func Timestamp() int64 {
+	return time.Now().UnixNano() / 1000000
+}

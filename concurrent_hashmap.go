@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-	"unsafe"
 )
 
 type concurrent_hashmap struct {
@@ -21,9 +20,8 @@ func newConcurrentHashmap(cfg Config) *concurrent_hashmap {
 	}
 	for i, _ := range m.buckets {
 		m.buckets[i] = bucket{
-			clear_count: cfg.ClearPerCheck,
-			ttl:         make([]heap.Element, 0),
-			data:        make(map[string]element),
+			ttl:  make([]heap.Element, 0),
+			data: make(map[string]element),
 		}
 	}
 	for i, _ := range m.buckets {
@@ -33,42 +31,38 @@ func newConcurrentHashmap(cfg Config) *concurrent_hashmap {
 	return m
 }
 
-func (self concurrent_hashmap) getBucket(key *string) *bucket {
-	var k = *(*[]byte)(unsafe.Pointer(key))
-	var idx = utils.NewFnv32(k) & (self.cfg.Segment - 1)
-	return &self.buckets[idx]
+func (c *concurrent_hashmap) getBucket(key string) *bucket {
+	var idx = utils.NewFnv32([]byte(key)) & (c.cfg.Segment - 1)
+	return &c.buckets[idx]
 }
 
 type bucket struct {
 	sync.RWMutex
-	data        map[string]element
-	ttl         heap.Heap
-	clear_count uint32
+	data map[string]element
+	ttl  heap.Heap
 }
 
 // 过期时间检查
-func (self *bucket) expireCheck(d time.Duration) {
+func (c *bucket) expireCheck(d time.Duration) {
 	var ticker = time.NewTicker(d)
 	defer ticker.Stop()
 	for {
 		<-ticker.C
 
-		self.Lock()
-		var num uint32 = 0
-		var ts = time.Now().UnixMilli()
-		for self.ttl.Len() > 0 {
-			if num >= self.clear_count || self.ttl[0].ExpireAt > ts {
+		c.Lock()
+		var ts = utils.Timestamp()
+		for c.ttl.Len() > 0 {
+			if c.ttl[0].ExpireAt > ts {
 				break
 			}
 
-			var ele0 = self.ttl.Pop()
-			ele1, exist := self.data[ele0.Key]
+			var ele0 = c.ttl.Pop()
+			ele1, exist := c.data[ele0.Key]
 			if !exist || ele1.ExpireAt > ts {
 				continue
 			}
-			delete(self.data, ele0.Key)
-			num++
+			delete(c.data, ele0.Key)
 		}
-		self.Unlock()
+		c.Unlock()
 	}
 }
