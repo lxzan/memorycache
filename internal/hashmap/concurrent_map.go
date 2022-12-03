@@ -16,8 +16,8 @@ type (
 
 	Bucket struct {
 		sync.RWMutex
-		M map[string]types.Element
-		H heap.Heap
+		Map  map[string]types.Element
+		Heap heap.Heap
 	}
 )
 
@@ -28,8 +28,8 @@ func NewConcurrentMap(segment uint32, interval time.Duration) *ConcurrentMap {
 	}
 	for i, _ := range m.Buckets {
 		m.Buckets[i] = &Bucket{
-			H: make([]heap.Element, 0),
-			M: make(map[string]types.Element),
+			Heap: make([]heap.Element, 0),
+			Map:  make(map[string]types.Element),
 		}
 	}
 	for i, _ := range m.Buckets {
@@ -52,17 +52,17 @@ func (c *Bucket) expireCheck(d time.Duration) {
 
 		c.Lock()
 		var ts = utils.Timestamp()
-		for c.H.Len() > 0 {
-			if c.H[0].ExpireAt > ts {
+		for c.Heap.Len() > 0 {
+			if c.Heap[0].ExpireAt > ts {
 				break
 			}
 
-			var ele0 = c.H.Pop()
-			ele1, exist := c.M[ele0.Key]
+			var ele0 = c.Heap.Pop()
+			ele1, exist := c.Map[ele0.Key]
 			if !exist || ele0.ExpireAt != ele1.ExpireAt {
 				continue
 			}
-			delete(c.M, ele0.Key)
+			delete(c.Map, ele0.Key)
 		}
 		c.Unlock()
 	}

@@ -1,45 +1,35 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
-	"sort"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
 func TestExpire1(t *testing.T) {
-	var db = New()
+	var as = assert.New(t)
+	var db = New(Config{TTLCheckInterval: 100 * time.Millisecond})
 	db.Set("a", 1, time.Second)
 	db.Set("b", 1, 3*time.Second)
 	db.Set("c", 1, 5*time.Second)
 	db.Set("d", 1, 7*time.Second)
 	db.Set("e", 1, 9*time.Second)
+	db.Set("c", 1, time.Second)
 
-	db.Set("c", "1", time.Second)
 	time.Sleep(2 * time.Second)
-
-	var keys = db.Keys()
-	sort.Strings(keys)
-	if !utils.SameStrings(keys, []string{"b", "d", "e"}) {
-		t.Fatal()
-	}
+	as.ElementsMatch(db.Keys(), []string{"b", "d", "e"})
 }
 
 func TestExpire2(t *testing.T) {
-	var cfg = Config{TTLCheckInterval: 2, Segment: 1}
-	var db = New(cfg)
+	var as = assert.New(t)
+	var db = New(Config{TTLCheckInterval: 100 * time.Millisecond})
 	db.Set("a", 1, time.Second)
-	db.Set("b", 1, 3*time.Second)
+	db.Set("b", 1, 2*time.Second)
 	db.Set("c", 1, 5*time.Second)
 	db.Set("d", 1, 7*time.Second)
 	db.Set("e", 1, 29*time.Second)
-
 	db.Set("a", 1, 4*time.Second)
-	time.Sleep(3 * time.Second)
 
-	var keys = db.Keys()
-	sort.Strings(keys)
-	if !utils.SameStrings(keys, []string{"a", "c", "d", "e"}) {
-		t.Fatal()
-	}
+	time.Sleep(3 * time.Second)
+	as.ElementsMatch(db.Keys(), []string{"a", "c", "d", "e"})
 }
