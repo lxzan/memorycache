@@ -59,10 +59,9 @@ func (c *Bucket) expireCheck(d time.Duration) {
 
 			var ele0 = c.Heap.Pop()
 			ele1, exist := c.Map[ele0.Key]
-			if !exist || ele0.ExpireAt != ele1.ExpireAt {
-				continue
+			if exist && ele0.ExpireAt == ele1.ExpireAt {
+				delete(c.Map, ele0.Key)
 			}
-			delete(c.Map, ele0.Key)
 		}
 		c.Unlock()
 	}
