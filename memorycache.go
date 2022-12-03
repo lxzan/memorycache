@@ -55,28 +55,25 @@ func New(config ...Config) *MemoryCache {
 }
 
 func (c *MemoryCache) valid(ts int64) bool {
-	return ts == -1 || ts > utils.Timestamp()
+	return ts <= 0 || ts > utils.Timestamp()
 }
 
-func (c *MemoryCache) getExpireTimestamp(ttl ...time.Duration) int64 {
-	if len(ttl) == 0 || ttl[0] <= 0 {
-		return -1
-	}
-	return time.Now().Add(ttl[0]).UnixNano() / 1000000
+func (c *MemoryCache) getExpireTimestamp(expiration time.Duration) int64 {
+	return time.Now().Add(expiration).UnixNano() / 1000000
 }
 
-// ttl: -1 means forever
-func (c *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
+// expiration: <=0表示永不过期
+func (c *MemoryCache) Set(key string, value interface{}, expiration time.Duration) {
 	var ele = element{
 		Value:    value,
-		ExpireAt: c.getExpireTimestamp(ttl),
+		ExpireAt: c.getExpireTimestamp(expiration),
 	}
 
 	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
-	bucket.data[key] = ele
+	bucket.m[key] = ele
 	if ele.ExpireAt != -1 {
-		bucket.ttl.Push(heap.Element{
+		bucket.h.Push(heap.Element{
 			Key:      key,
 			ExpireAt: ele.ExpireAt,
 		})
@@ -88,7 +85,7 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 	var bucket = c.storage.getBucket(key)
 	bucket.RLock()
 	defer bucket.RUnlock()
-	result, exist := bucket.data[key]
+	result, exist := bucket.m[key]
 	if !exist || !c.valid(result.ExpireAt) {
 		return nil, false
 	}
@@ -98,18 +95,18 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 func (c *MemoryCache) Delete(key string) {
 	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
-	delete(bucket.data, key)
+	delete(bucket.m, key)
 	bucket.Unlock()
 }
 
-func (c *MemoryCache) Expire(key string, ttl time.Duration) {
+func (c *MemoryCache) Expire(key string, expiration time.Duration) {
 	var bucket = c.storage.getBucket(key)
 	bucket.Lock()
-	if result, exist := bucket.data[key]; exist && c.valid(result.ExpireAt) {
-		result.ExpireAt = c.getExpireTimestamp(ttl)
-		bucket.data[key] = result
-		if result.ExpireAt != -1 {
-			bucket.ttl.Push(heap.Element{
+	if result, exist := bucket.m[key]; exist && c.valid(result.ExpireAt) {
+		result.ExpireAt = c.getExpireTimestamp(expiration)
+		bucket.m[key] = result
+		if result.ExpireAt > 0 {
+			bucket.h.Push(heap.Element{
 				Key:      key,
 				ExpireAt: result.ExpireAt,
 			})
@@ -123,7 +120,7 @@ func (c *MemoryCache) Keys() []string {
 	for i, _ := range c.storage.buckets {
 		var bucket = &c.storage.buckets[i]
 		bucket.RLock()
-		for k, v := range bucket.data {
+		for k, v := range bucket.m {
 			if c.valid(v.ExpireAt) {
 				arr = append(arr, k)
 			}
@@ -138,7 +135,7 @@ func (c *MemoryCache) Len() int {
 	for i, _ := range c.storage.buckets {
 		var bucket = &c.storage.buckets[i]
 		bucket.RLock()
-		for _, v := range bucket.data {
+		for _, v := range bucket.m {
 			if c.valid(v.ExpireAt) {
 				num++
 			}

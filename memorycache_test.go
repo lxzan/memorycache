@@ -26,7 +26,7 @@ func TestExpire1(t *testing.T) {
 }
 
 func TestExpire2(t *testing.T) {
-	var cfg = Config{TTLCheckInterval: 2}
+	var cfg = Config{TTLCheckInterval: 2, Segment: 1}
 	var db = New(cfg)
 	db.Set("a", 1, time.Second)
 	db.Set("b", 1, 3*time.Second)
@@ -34,12 +34,12 @@ func TestExpire2(t *testing.T) {
 	db.Set("d", 1, 7*time.Second)
 	db.Set("e", 1, 29*time.Second)
 
-	db.Set("c", "1", time.Second)
+	db.Set("a", 1, 4*time.Second)
 	time.Sleep(3 * time.Second)
 
 	var keys = db.Keys()
 	sort.Strings(keys)
-	if !utils.SameStrings(keys, []string{"d", "e"}) {
+	if !utils.SameStrings(keys, []string{"a", "c", "d", "e"}) {
 		t.Fatal()
 	}
 }

@@ -20,8 +20,8 @@ func newConcurrentHashmap(cfg Config) *concurrent_hashmap {
 	}
 	for i, _ := range m.buckets {
 		m.buckets[i] = bucket{
-			ttl:  make([]heap.Element, 0),
-			data: make(map[string]element),
+			h: make([]heap.Element, 0),
+			m: make(map[string]element),
 		}
 	}
 	for i, _ := range m.buckets {
@@ -38,8 +38,8 @@ func (c *concurrent_hashmap) getBucket(key string) *bucket {
 
 type bucket struct {
 	sync.RWMutex
-	data map[string]element
-	ttl  heap.Heap
+	m map[string]element
+	h heap.Heap
 }
 
 // 过期时间检查
@@ -51,17 +51,17 @@ func (c *bucket) expireCheck(d time.Duration) {
 
 		c.Lock()
 		var ts = utils.Timestamp()
-		for c.ttl.Len() > 0 {
-			if c.ttl[0].ExpireAt > ts {
+		for c.h.Len() > 0 {
+			if c.h[0].ExpireAt > ts {
 				break
 			}
 
-			var ele0 = c.ttl.Pop()
-			ele1, exist := c.data[ele0.Key]
-			if !exist || ele1.ExpireAt > ts {
+			var ele0 = c.h.Pop()
+			ele1, exist := c.m[ele0.Key]
+			if !exist || ele0.ExpireAt != ele1.ExpireAt {
 				continue
 			}
-			delete(c.data, ele0.Key)
+			delete(c.m, ele0.Key)
 		}
 		c.Unlock()
 	}
