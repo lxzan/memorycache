@@ -8,53 +8,21 @@ import (
 	"time"
 )
 
-const (
-	DefaultSegment          = 16
-	DefaultTTLCheckInterval = 30 * time.Second
-)
-
-type (
-	Config struct {
-		TTLCheckInterval time.Duration
-		Segment          uint32 // bucket segments, segment=2^n
-	}
-
-	MemoryCache struct {
-		cfg     *Config
-		storage *hashmap.ConcurrentMap
-	}
-)
-
-func (c *Config) initialize() *Config {
-	if c.Segment <= 0 {
-		c.Segment = DefaultSegment
-	}
-	if c.TTLCheckInterval <= 0 {
-		c.TTLCheckInterval = DefaultTTLCheckInterval
-	}
-	return c
+type MemoryCache struct {
+	config  *Config
+	storage *hashmap.ConcurrentMap
 }
 
-func (c *Config) validate() *Config {
-	var segment = c.Segment
-	var msg = "segment=2^n"
-	for segment > 1 {
-		if segment%2 != 0 {
-			panic(msg)
-		}
-		segment /= 2
+func New(options ...Option) *MemoryCache {
+	var config = &Config{}
+	options = append(options, withInitialize())
+	for _, fn := range options {
+		fn(config)
 	}
-	return c
-}
 
-func New(config ...Config) *MemoryCache {
-	var cfg Config
-	if len(config) > 0 {
-		cfg = config[0]
-	}
 	return &MemoryCache{
-		cfg:     cfg.initialize().validate(),
-		storage: hashmap.NewConcurrentMap(cfg.Segment, cfg.TTLCheckInterval),
+		config:  config,
+		storage: hashmap.NewConcurrentMap(config.Segment, config.TTLCheckInterval),
 	}
 }
 

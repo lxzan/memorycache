@@ -8,7 +8,7 @@ import (
 
 func TestExpire1(t *testing.T) {
 	var as = assert.New(t)
-	var db = New(Config{TTLCheckInterval: 100 * time.Millisecond})
+	var db = New(WithTTLCheckInterval(100 * time.Millisecond))
 	db.Set("a", 1, time.Second)
 	db.Set("b", 1, 3*time.Second)
 	db.Set("c", 1, 5*time.Second)
@@ -22,7 +22,7 @@ func TestExpire1(t *testing.T) {
 
 func TestExpire2(t *testing.T) {
 	var as = assert.New(t)
-	var db = New(Config{TTLCheckInterval: 100 * time.Millisecond})
+	var db = New(WithTTLCheckInterval(100 * time.Millisecond))
 	db.Set("a", 1, time.Second)
 	db.Set("b", 1, 2*time.Second)
 	db.Set("c", 1, 5*time.Second)

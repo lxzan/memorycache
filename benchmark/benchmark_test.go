@@ -20,9 +20,7 @@ func init() {
 
 func BenchmarkSet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		var mc = memorycache.New(memorycache.Config{
-			Segment: 128,
-		})
+		var mc = memorycache.New(memorycache.WithSegment(16))
 		var wg = sync.WaitGroup{}
 		wg.Add(2)
 		go func() {
@@ -40,16 +38,11 @@ func BenchmarkSet(b *testing.B) {
 			wg.Done()
 		}()
 		wg.Wait()
-
-		//time.Sleep(5 * time.Second)
-		//b.Logf("Key Count: %d\n", mc.Len())
 	}
 }
 
 func BenchmarkGet(b *testing.B) {
-	var mc = memorycache.New(memorycache.Config{
-		Segment: 128,
-	})
+	var mc = memorycache.New(memorycache.WithSegment(16))
 	for j := 0; j < benchcount; j++ {
 		mc.Set(benchkeys[j], 1, -1)
 	}
