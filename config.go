@@ -9,8 +9,8 @@ const (
 
 type (
 	Config struct {
-		TTLCheckInterval time.Duration
-		Segment          uint32 // bucket segments, segment=2^n
+		TTLCheckInterval time.Duration // 过期检查周期
+		Segment          uint32        // 分片数, segment=2^n
 	}
 
 	Option func(c *Config)
