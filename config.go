@@ -10,7 +10,7 @@ const (
 type (
 	Config struct {
 		TTLCheckInterval time.Duration // 过期检查周期
-		Segment          uint32        // 分片数, segment=2^n
+		Segment          uint32        // 分片数, segment=2^n, eg: 4, 8, 16...
 	}
 
 	Option func(c *Config)

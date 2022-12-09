@@ -32,37 +32,38 @@ func NewConcurrentMap(segment uint32, interval time.Duration) *ConcurrentMap {
 			Map:  make(map[string]types.Element),
 		}
 	}
-	for i, _ := range m.Buckets {
-		go m.Buckets[i].expireCheck(interval)
-	}
+
+	go func() {
+		var ticker = time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			for _, bucket := range m.Buckets {
+				bucket.expireCheck()
+			}
+		}
+	}()
 	return m
+}
+
+// 过期时间检查
+func (c *Bucket) expireCheck() {
+	c.Lock()
+	var ts = utils.Timestamp()
+	for c.Heap.Len() > 0 {
+		if c.Heap[0].ExpireAt > ts {
+			break
+		}
+		var heapEle = c.Heap.Pop()
+		mapEle, exist := c.Map[heapEle.Key]
+		if exist && heapEle.ExpireAt == mapEle.ExpireAt {
+			delete(c.Map, heapEle.Key)
+		}
+	}
+	c.Unlock()
 }
 
 func (c *ConcurrentMap) GetBucket(key string) *Bucket {
 	var idx = utils.NewFnv32([]byte(key)) & (c.Segment - 1)
 	return c.Buckets[idx]
-}
-
-// 过期时间检查
-func (c *Bucket) expireCheck(d time.Duration) {
-	var ticker = time.NewTicker(d)
-	defer ticker.Stop()
-	for {
-		<-ticker.C
-
-		c.Lock()
-		var ts = utils.Timestamp()
-		for c.Heap.Len() > 0 {
-			if c.Heap[0].ExpireAt > ts {
-				break
-			}
-
-			var ele0 = c.Heap.Pop()
-			ele1, exist := c.Map[ele0.Key]
-			if exist && ele0.ExpireAt == ele1.ExpireAt {
-				delete(c.Map, ele0.Key)
-			}
-		}
-		c.Unlock()
-	}
 }
