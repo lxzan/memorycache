@@ -10,7 +10,7 @@ func TestNew(t *testing.T) {
 	var as = assert.New(t)
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithTTLCheckInterval(100 * time.Millisecond))
+		var db = New()
 		db.Set("a", 1, time.Second)
 		db.Set("b", 1, 3*time.Second)
 		db.Set("c", 1, 5*time.Second)
@@ -23,7 +23,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithTTLCheckInterval(100 * time.Millisecond))
+		var db = New()
 		db.Set("a", 1, time.Second)
 		db.Set("b", 1, 2*time.Second)
 		db.Set("c", 1, 5*time.Second)
@@ -36,7 +36,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithTTLCheckInterval(100 * time.Millisecond))
+		var db = New()
 		db.Set("a", 1, time.Second)
 		db.Set("b", 1, 2*time.Second)
 		db.Set("c", 1, 4*time.Second)

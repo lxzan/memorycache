@@ -9,19 +9,28 @@ const (
 
 type (
 	Config struct {
-		TTLCheckInterval time.Duration // 过期检查周期
-		Segment          uint32        // 分片数, segment=2^n, eg: 4, 8, 16...
+		// 过期时间检查周期
+		// expiration time inspection cycle
+		TTLCheckInterval time.Duration //
+
+		// 分片数, segment=2^n, eg: 4, 8, 16...
+		// number of hashmap pieces, eg: 4, 8, 16...
+		Segment uint32
 	}
 
 	Option func(c *Config)
 )
 
+// WithSegment
+// Set Segment
 func WithSegment(segment uint32) Option {
 	return func(c *Config) {
 		c.Segment = segment
 	}
 }
 
+// WithTTLCheckInterval
+// Set TTLCheckInterval
 func WithTTLCheckInterval(TTLCheckInterval time.Duration) Option {
 	return func(c *Config) {
 		c.TTLCheckInterval = TTLCheckInterval

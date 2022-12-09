@@ -34,8 +34,11 @@ func (c *MemoryCache) getExpireTimestamp(expiration time.Duration) int64 {
 	return time.Now().Add(expiration).UnixNano() / 1000000
 }
 
+// Set
 // 设置键值和过期时间
 // expiration: <=0表示永不过期
+// set the key value and expiration time
+// expiration: <=0 means never expire
 func (c *MemoryCache) Set(key string, value interface{}, expiration time.Duration) {
 	var ele = types.Element{
 		Value:    value,
@@ -54,7 +57,9 @@ func (c *MemoryCache) Set(key string, value interface{}, expiration time.Duratio
 	bucket.Unlock()
 }
 
+// Get
 // 根据键获取值
+// get value by key
 func (c *MemoryCache) Get(key string) (interface{}, bool) {
 	var bucket = c.storage.GetBucket(key)
 	bucket.RLock()
@@ -66,7 +71,9 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 	return result.Value, true
 }
 
+// Delete
 // 删除一个键
+// delete value by key
 func (c *MemoryCache) Delete(key string) {
 	var bucket = c.storage.GetBucket(key)
 	bucket.Lock()
@@ -91,7 +98,9 @@ func (c *MemoryCache) Expire(key string, expiration time.Duration) {
 	bucket.Unlock()
 }
 
-// 获取所有键
+// Keys
+// 获取所有有效的键
+// list valid keys
 func (c *MemoryCache) Keys() []string {
 	var arr = make([]string, 0)
 	var now = utils.Timestamp()
@@ -107,7 +116,9 @@ func (c *MemoryCache) Keys() []string {
 	return arr
 }
 
+// Len
 // 获取有效元素个数
+// get the number of valid keys
 func (c *MemoryCache) Len() int {
 	var num = 0
 	var now = utils.Timestamp()

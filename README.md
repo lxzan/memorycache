@@ -15,7 +15,7 @@ import (
 func main() {
 	mc := memorycache.New(
 		memorycache.WithSegment(16),
-		memorycache.WithTTLCheckInterval(100*time.Millisecond),
+		memorycache.WithTTLCheckInterval(30*time.Second),
 	)
 	mc.Set("xxx", 1, 500*time.Millisecond)
 	time.Sleep(time.Second)
