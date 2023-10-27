@@ -46,7 +46,7 @@ func TestNew(t *testing.T) {
 		db.Set("d", 1, 40*time.Millisecond)
 
 		time.Sleep(50 * time.Millisecond)
-		as.Equal(0, db.Len())
+		as.Equal(0, db.Len(true))
 	})
 }
 
@@ -150,7 +150,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		deleted = mc.Delete(key)
 		assert.False(t, deleted)
 	}
-	assert.Equal(t, mc.Len(), count-100)
+	assert.Equal(t, mc.Len(true), count-100)
 }
 
 func TestMaxCap(t *testing.T) {
@@ -164,5 +164,5 @@ func TestMaxCap(t *testing.T) {
 		mc.Set(key, 1, -1)
 	}
 	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, mc.Len(), 100)
+	assert.Equal(t, mc.Len(false), 100)
 }

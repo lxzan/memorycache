@@ -16,6 +16,7 @@ type MemoryCache struct {
 }
 
 // New 创建缓存数据库实例
+// Creating a Cached Database Instance
 func New(options ...Option) *MemoryCache {
 	var config = &types.Config{}
 	options = append(options, withInitialize())
@@ -63,6 +64,7 @@ func (c *MemoryCache) getExp(d time.Duration) int64 {
 }
 
 // Set 设置键值和过期时间. exp<=0表示永不过期.
+// Set the key value and expiration time. exp<=0 means never expire.
 func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -88,7 +90,7 @@ func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bo
 	return false
 }
 
-// Get 获取
+// Get
 func (c *MemoryCache) Get(key string) (any, bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -101,6 +103,7 @@ func (c *MemoryCache) Get(key string) (any, bool) {
 }
 
 // GetAndRefresh 获取. 如果存在, 刷新过期时间.
+// Get a value. If it exists, refreshes the expiration time.
 func (c *MemoryCache) GetAndRefresh(key string, exp time.Duration) (any, bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -116,7 +119,7 @@ func (c *MemoryCache) GetAndRefresh(key string, exp time.Duration) (any, bool) {
 	return v, true
 }
 
-// Delete 删除一个键
+// Delete
 func (c *MemoryCache) Delete(key string) (deleted bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -132,7 +135,8 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 	return true
 }
 
-// Keys 获取前缀匹配的key, 星号匹配所有
+// Keys 获取前缀匹配的key. 可以通过星号获取所有的key.
+// Get prefix matching key,  You can get all the keys with an asterisk.
 func (c *MemoryCache) Keys(prefix string) []string {
 	var arr = make([]string, 0)
 	var now = time.Now().UnixMilli()
@@ -148,15 +152,21 @@ func (c *MemoryCache) Keys(prefix string) []string {
 	return arr
 }
 
-// Len 获取有效元素(未过期)数量
-func (c *MemoryCache) Len() int {
+// Len 获取元素数量
+// Get the number of elements
+// @check: 是否检查过期时间 (whether to check expiration time)
+func (c *MemoryCache) Len(check bool) int {
 	var num = 0
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		for _, v := range b.Heap.Data {
-			if !v.Expired(now) {
-				num++
+		if !check {
+			num += b.Heap.Len()
+		} else {
+			for _, v := range b.Heap.Data {
+				if !v.Expired(now) {
+					num++
+				}
 			}
 		}
 		b.Unlock()

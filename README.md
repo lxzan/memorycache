@@ -10,6 +10,11 @@
 
 [4]: https://codecov.io/gh/lxzan/memorycache
 
+### Description
+Minimalist in-memory KV storage, powered by hashmap and minimal heap, with no special optimizations for GC.
+It has O(1) read efficiency, O(logN) write efficiency.
+Cache deprecation policy: obsolete or overflowed keys are flushed, with a 30s (default) check.
+
 ### Usage
 ```go
 package main
