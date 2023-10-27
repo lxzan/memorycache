@@ -1,45 +1,25 @@
 package utils
 
-import (
-	"math/rand"
-	"sort"
-	"time"
-)
-
-type RandomString string
-
-var Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-const (
-	Alphabet RandomString = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	Numeric  RandomString = "0123456789"
-)
-
-func (this RandomString) Generate(n int) string {
-	var b = make([]byte, n)
-	var length = len(this)
-	for i := 0; i < n; i++ {
-		var idx = Rand.Intn(length)
-		b[i] = this[idx]
-	}
-	return string(b)
+type Integer interface {
+	int | int64 | int32 | uint | uint64 | uint32
 }
 
-func SameStrings(arr1, arr2 []string) bool {
-	sort.Strings(arr1)
-	sort.Strings(arr2)
-	var n = len(arr1)
-	if n != len(arr2) {
-		return false
+func ToBinaryNumber[T Integer](n T) T {
+	var x T = 1
+	for x < n {
+		x *= 2
 	}
-	for i := 0; i < n; i++ {
-		if arr1[i] != arr2[i] {
-			return false
-		}
-	}
-	return true
+	return x
 }
 
-func Timestamp() int64 {
-	return time.Now().UnixNano() / 1000000
+func Uniq[T comparable](arr []T) []T {
+	var m = make(map[T]struct{}, len(arr))
+	var list = make([]T, 0, len(arr))
+	for _, item := range arr {
+		m[item] = struct{}{}
+	}
+	for k, _ := range m {
+		list = append(list, k)
+	}
+	return list
 }
