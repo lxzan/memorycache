@@ -1,16 +1,15 @@
 package utils
 
 const (
-	offset32 = 2166136261
-	prime32  = 16777619
+	prime64  = 1099511628211
+	offset64 = 14695981039346656037
 )
 
-// Fnv32 returns a new 32-bit FNV-1 hash.Hash.
-func Fnv32(s string) uint32 {
-	var hash uint32 = offset32
+func Fnv64(s string) uint64 {
+	var hash uint64 = offset64
 	for _, c := range s {
-		hash *= prime32
-		hash ^= uint32(c)
+		hash *= prime64
+		hash ^= uint64(c)
 	}
 	return hash
 }

@@ -22,7 +22,7 @@ func (c *Element) Expired(now int64) bool {
 
 type Config struct {
 	Interval       time.Duration // 检查周期
-	BucketNum      uint32        // 存储桶数量
+	BucketNum      int           // 存储桶数量
 	MaxKeysDeleted int           // 每次检查至多删除key的数量(单个存储桶)
 	InitialSize    int           // 初始化大小(单个存储桶)
 	MaxCapacity    int           // 最大容量(单个存储桶)

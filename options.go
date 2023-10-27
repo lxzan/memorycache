@@ -17,7 +17,7 @@ const (
 type Option func(c *types.Config)
 
 // WithBucketNum 设置存储桶数量
-func WithBucketNum(num uint32) Option {
+func WithBucketNum(num int) Option {
 	return func(c *types.Config) {
 		c.BucketNum = num
 	}
