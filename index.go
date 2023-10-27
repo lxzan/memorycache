@@ -15,7 +15,7 @@ type MemoryCache struct {
 	storage []*bucket
 }
 
-// New 创建缓存数据库
+// New 创建缓存数据库实例
 func New(options ...Option) *MemoryCache {
 	var config = &types.Config{}
 	options = append(options, withInitialize())
@@ -50,7 +50,7 @@ func New(options ...Option) *MemoryCache {
 }
 
 func (c *MemoryCache) getBucket(key string) *bucket {
-	var idx = utils.NewFnv32(key) & (c.config.BucketNum - 1)
+	var idx = utils.Fnv32(key) & (c.config.BucketNum - 1)
 	return c.storage[idx]
 }
 
@@ -62,7 +62,7 @@ func (c *MemoryCache) getExp(d time.Duration) int64 {
 	return time.Now().Add(d).UnixMilli()
 }
 
-// 设置键值和过期时间. exp<=0表示永不过期.
+// Set 设置键值和过期时间. exp<=0表示永不过期.
 func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -116,7 +116,7 @@ func (c *MemoryCache) GetAndRefresh(key string, exp time.Duration) (any, bool) {
 	return v, true
 }
 
-// 删除一个键
+// Delete 删除一个键
 func (c *MemoryCache) Delete(key string) (deleted bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -132,7 +132,7 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 	return true
 }
 
-// 获取前缀匹配的key
+// Keys 获取前缀匹配的key, 星号匹配所有
 func (c *MemoryCache) Keys(prefix string) []string {
 	var arr = make([]string, 0)
 	var now = time.Now().UnixMilli()
@@ -148,7 +148,7 @@ func (c *MemoryCache) Keys(prefix string) []string {
 	return arr
 }
 
-// 获取有效元素个数
+// Len 获取有效元素(未过期)数量
 func (c *MemoryCache) Len() int {
 	var num = 0
 	var now = time.Now().UnixMilli()
@@ -181,7 +181,7 @@ func (c *bucket) expireTimeCheck(maxNum int, maxCap int) {
 		delete(c.Map, c.Heap.Pop().Key)
 		num++
 	}
-	for c.Heap.Len() > maxNum && num < maxNum {
+	for c.Heap.Len() > maxCap && num < maxNum {
 		delete(c.Map, c.Heap.Pop().Key)
 		num++
 	}

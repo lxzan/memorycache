@@ -23,14 +23,14 @@ func WithBucketNum(num uint32) Option {
 	}
 }
 
-// WithMaxKeysDeleted 设置单个存储桶每次TTL检查最大删除key数量
+// WithMaxKeysDeleted (单个存储桶)设置每次TTL检查最大删除key数量
 func WithMaxKeysDeleted(num int) Option {
 	return func(c *types.Config) {
 		c.MaxKeysDeleted = num
 	}
 }
 
-// WithBucketSize 设置单个存储桶的初始化大小, 最大容量
+// WithBucketSize (单个存储桶)设置初始化大小, 最大容量. 超过最大容量会被定期清除.
 func WithBucketSize(size, cap int) Option {
 	return func(c *types.Config) {
 		c.InitialSize = size

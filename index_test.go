@@ -152,3 +152,17 @@ func TestMemoryCache_Delete(t *testing.T) {
 	}
 	assert.Equal(t, mc.Len(), count-100)
 }
+
+func TestMaxCap(t *testing.T) {
+	var mc = New(
+		WithBucketNum(1),
+		WithBucketSize(10, 100),
+		WithInterval(100*time.Millisecond),
+	)
+	for i := 0; i < 1000; i++ {
+		key := string(utils.AlphabetNumeric.Generate(8))
+		mc.Set(key, 1, -1)
+	}
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, mc.Len(), 100)
+}
