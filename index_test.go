@@ -21,7 +21,7 @@ func TestNew(t *testing.T) {
 		db.Set("c", 1, time.Millisecond)
 
 		time.Sleep(20 * time.Millisecond)
-		as.ElementsMatch(db.Keys("*"), []string{"b", "d", "e"})
+		as.ElementsMatch(db.Keys(""), []string{"b", "d", "e"})
 	})
 
 	t.Run("", func(t *testing.T) {
@@ -34,7 +34,7 @@ func TestNew(t *testing.T) {
 		db.Set("a", 1, 40*time.Millisecond)
 
 		time.Sleep(30 * time.Millisecond)
-		as.ElementsMatch(db.Keys("*"), []string{"a", "c", "d", "e"})
+		as.ElementsMatch(db.Keys(""), []string{"a", "c", "d", "e"})
 	})
 
 	t.Run("", func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestNew(t *testing.T) {
 		db.Set("d", 1, 40*time.Millisecond)
 
 		time.Sleep(50 * time.Millisecond)
-		as.Equal(0, db.Len(true))
+		as.Equal(0, len(db.Keys("")))
 	})
 }
 
@@ -54,6 +54,7 @@ func TestMemoryCache_Set(t *testing.T) {
 	var list []string
 	var count = 10000
 	var mc = New(WithInterval(100 * time.Millisecond))
+	mc.Clear()
 	for i := 0; i < count; i++ {
 		key := string(utils.AlphabetNumeric.Generate(8))
 		exp := rand.Intn(1000)
@@ -69,7 +70,7 @@ func TestMemoryCache_Set(t *testing.T) {
 		mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	assert.ElementsMatch(t, utils.Uniq(list), mc.Keys("*"))
+	assert.ElementsMatch(t, utils.Uniq(list), mc.Keys(""))
 }
 
 func TestMemoryCache_Get(t *testing.T) {
@@ -115,7 +116,7 @@ func TestMemoryCache_GetAndRefresh(t *testing.T) {
 		list = append(list, key)
 		mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
 	}
-	var keys = mc.Keys("*")
+	var keys = mc.Keys("")
 	for _, key := range keys {
 		mc.GetAndRefresh(key, 2*time.Second)
 	}
@@ -141,7 +142,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
 	}
 
-	var keys = mc.Keys("*")
+	var keys = mc.Keys("")
 	for i := 0; i < 100; i++ {
 		deleted := mc.Delete(keys[i])
 		assert.True(t, deleted)
@@ -150,7 +151,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		deleted = mc.Delete(key)
 		assert.False(t, deleted)
 	}
-	assert.Equal(t, mc.Len(true), count-100)
+	assert.Equal(t, mc.Len(), count-100)
 }
 
 func TestMaxCap(t *testing.T) {
@@ -164,5 +165,5 @@ func TestMaxCap(t *testing.T) {
 		mc.Set(key, 1, -1)
 	}
 	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, mc.Len(false), 100)
+	assert.Equal(t, mc.Len(), 100)
 }

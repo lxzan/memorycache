@@ -24,10 +24,10 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 		memorycache.WithBucketNum(128),
 		memorycache.WithBucketSize(1000, 10000),
 	)
-	var i = int64(0)
+	var i = atomic.Int64{}
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			index := atomic.AddInt64(&i, 1) % benchcount
+			index := i.Add(1) % benchcount
 			mc.Set(benchkeys[index], 1, time.Hour)
 		}
 	})
@@ -35,18 +35,18 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 
 func BenchmarkMemoryCache_Get(b *testing.B) {
 	var mc = memorycache.New(
-		memorycache.WithBucketNum(16),
-		memorycache.WithBucketSize(100, 1000),
+		memorycache.WithBucketNum(128),
+		memorycache.WithBucketSize(1000, 10000),
 	)
 	for i := 0; i < benchcount; i++ {
 		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
 	}
 
-	var i = int64(0)
+	var i = atomic.Int64{}
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			index := atomic.AddInt64(&i, 1) % benchcount
+			index := i.Add(1) % benchcount
 			mc.Get(benchkeys[index])
 		}
 	})
@@ -58,10 +58,10 @@ func BenchmarkRistretto_Set(b *testing.B) {
 		MaxCost:     1 << 30, // maximum cost of cache (1GB).
 		BufferItems: 64,      // number of keys per Get buffer.
 	})
-	var i = int64(0)
+	var i = atomic.Int64{}
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			index := atomic.AddInt64(&i, 1) % benchcount
+			index := i.Add(1) % benchcount
 			mc.SetWithTTL(benchkeys[index], 1, 1, time.Hour)
 		}
 	})
@@ -77,11 +77,11 @@ func BenchmarkRistretto_Get(b *testing.B) {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
 	}
 
-	var i = int64(0)
+	var i = atomic.Int64{}
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			index := atomic.AddInt64(&i, 1) % benchcount
+			index := i.Add(1) % benchcount
 			mc.Get(benchkeys[index])
 		}
 	})

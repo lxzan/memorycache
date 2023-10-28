@@ -11,8 +11,7 @@
 [4]: https://codecov.io/gh/lxzan/memorycache
 
 ### Description
-Minimalist in-memory KV storage, powered by hashmap and minimal heap, without optimizations for GC.
-It has O(1) read efficiency, O(logN) write efficiency.
+Minimalist in-memory KV storage, powered by hashmap and minimal quad heap, without optimizations for GC.
 Cache deprecation policy: the set method cleans up overflowed keys; the cycle cleans up expired keys.
 
 ### Principle
@@ -59,10 +58,10 @@ go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: darwin
 goarch: arm64
 pkg: github.com/lxzan/memorycache/benchmark
-BenchmarkMemoryCache_Set-8   	 7038808	       153.9 ns/op	      26 B/op	       0 allocs/op
-BenchmarkMemoryCache_Get-8   	22969712	        50.92 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRistretto_Set-8     	13417420	       242.9 ns/op	     138 B/op	       2 allocs/op
-BenchmarkRistretto_Get-8     	15895714	        75.81 ns/op	      18 B/op	       1 allocs/op
+BenchmarkMemoryCache_Set-8   	 9836241	       117.0 ns/op	      19 B/op	       0 allocs/op
+BenchmarkMemoryCache_Get-8   	17689178	        67.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRistretto_Set-8     	14112769	       256.2 ns/op	     135 B/op	       2 allocs/op
+BenchmarkRistretto_Get-8     	15645778	        77.72 ns/op	      18 B/op	       1 allocs/op
 PASS
-ok  	github.com/lxzan/memorycache/benchmark	10.849s
+ok  	github.com/lxzan/memorycache/benchmark	14.059s
 ```
