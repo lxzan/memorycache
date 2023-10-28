@@ -1,6 +1,6 @@
 module github.com/lxzan/memorycache/benchmark
 
-go 1.18
+go 1.19
 
 require (
 	github.com/dgraph-io/ristretto v0.1.1
