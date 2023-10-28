@@ -3,15 +3,50 @@ package utils
 import (
 	"github.com/stretchr/testify/assert"
 	"hash/fnv"
+	"hash/maphash"
 	"testing"
 )
 
-func TestNewFnv32(t *testing.T) {
+func BenchmarkHash_Fnv64(b *testing.B) {
+	b.Run("16", func(b *testing.B) {
+		key := string(AlphabetNumeric.Generate(16))
+		for i := 0; i < b.N; i++ {
+			Fnv64(key)
+		}
+	})
+
+	b.Run("32", func(b *testing.B) {
+		key := string(AlphabetNumeric.Generate(32))
+		for i := 0; i < b.N; i++ {
+			Fnv64(key)
+		}
+	})
+}
+
+func BenchmarkHash_MapHash(b *testing.B) {
+	seed := maphash.MakeSeed()
+
+	b.Run("16", func(b *testing.B) {
+		key := string(AlphabetNumeric.Generate(16))
+		for i := 0; i < b.N; i++ {
+			maphash.String(seed, key)
+		}
+	})
+
+	b.Run("32", func(b *testing.B) {
+		key := string(AlphabetNumeric.Generate(32))
+		for i := 0; i < b.N; i++ {
+			maphash.String(seed, key)
+		}
+	})
+}
+
+func TestNewFnv64(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		key := AlphabetNumeric.Generate(16)
-		h := fnv.New32()
+		h := fnv.New64()
 		h.Write(key)
-		assert.Equal(t, h.Sum32(), Fnv32(string(key)))
+		assert.Equal(t, h.Sum64(), Fnv64(string(key)))
 	}
 }
 

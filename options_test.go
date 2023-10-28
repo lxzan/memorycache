@@ -10,11 +10,11 @@ func TestWithBucketNum(t *testing.T) {
 	var as = assert.New(t)
 	{
 		var mc = New(WithBucketNum(3))
-		as.Equal(mc.config.BucketNum, uint32(4))
+		as.Equal(mc.config.BucketNum, 4)
 	}
 	{
 		var mc = New(WithBucketNum(0))
-		as.Equal(mc.config.BucketNum, uint32(defaultBucketNum))
+		as.Equal(mc.config.BucketNum, defaultBucketNum)
 	}
 }
 

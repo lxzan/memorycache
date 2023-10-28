@@ -3,7 +3,7 @@ package memorycache
 import (
 	"github.com/lxzan/memorycache/internal/heap"
 	"github.com/lxzan/memorycache/internal/types"
-	"github.com/lxzan/memorycache/internal/utils"
+	"hash/maphash"
 	"math"
 	"strings"
 	"sync"
@@ -13,6 +13,7 @@ import (
 type MemoryCache struct {
 	config  *types.Config
 	storage []*bucket
+	seed    maphash.Seed
 }
 
 // New 创建缓存数据库实例
@@ -27,6 +28,7 @@ func New(options ...Option) *MemoryCache {
 	mc := &MemoryCache{
 		config:  config,
 		storage: make([]*bucket, config.BucketNum),
+		seed:    maphash.MakeSeed(),
 	}
 
 	for i, _ := range mc.storage {
@@ -41,8 +43,10 @@ func New(options ...Option) *MemoryCache {
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			for _, bucket := range mc.storage {
-				bucket.expireTimeCheck(config.MaxKeysDeleted, config.MaxCapacity)
+
+			var now = time.Now().UnixMilli()
+			for _, b := range mc.storage {
+				b.expireTimeCheck(now, config.MaxKeysDeleted)
 			}
 		}
 	}()
@@ -51,7 +55,7 @@ func New(options ...Option) *MemoryCache {
 }
 
 func (c *MemoryCache) getBucket(key string) *bucket {
-	var idx = utils.Fnv32(key) & (c.config.BucketNum - 1)
+	var idx = maphash.String(c.seed, key) & uint64(c.config.BucketNum-1)
 	return c.storage[idx]
 }
 
@@ -79,14 +83,12 @@ func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bo
 		return true
 	}
 
-	var ele = &types.Element{
-		Key:      key,
-		Value:    value,
-		ExpireAt: expireAt,
-	}
-
+	var ele = &types.Element{Key: key, Value: value, ExpireAt: expireAt}
 	b.Heap.Push(ele)
 	b.Map[key] = ele
+	if b.Heap.Len() > c.config.MaxCapacity {
+		delete(b.Map, b.Heap.Pop().Key)
+	}
 	return false
 }
 
@@ -181,18 +183,12 @@ type bucket struct {
 }
 
 // 过期时间检查
-func (c *bucket) expireTimeCheck(maxNum int, maxCap int) {
+func (c *bucket) expireTimeCheck(now int64, num int) {
 	c.Lock()
 	defer c.Unlock()
 
-	var now = time.Now().UnixMilli()
-	var num = 0
-	for c.Heap.Len() > 0 && c.Heap.Front().Expired(now) && num < maxNum {
+	for c.Heap.Len() > 0 && c.Heap.Front().Expired(now) && num > 0 {
 		delete(c.Map, c.Heap.Pop().Key)
-		num++
-	}
-	for c.Heap.Len() > maxCap && num < maxNum {
-		delete(c.Map, c.Heap.Pop().Key)
-		num++
+		num--
 	}
 }

@@ -11,9 +11,17 @@
 [4]: https://codecov.io/gh/lxzan/memorycache
 
 ### Description
-Minimalist in-memory KV storage, powered by hashmap and minimal heap, with no special optimizations for GC.
+Minimalist in-memory KV storage, powered by hashmap and minimal heap, without optimizations for GC.
 It has O(1) read efficiency, O(logN) write efficiency.
-Cache deprecation policy: obsolete or overflowed keys are flushed, with a 30s (default) check.
+Cache deprecation policy: the set method cleans up overflowed keys; the cycle cleans up expired keys.
+
+### Principle
+- Storage Data Limit: Limited by maximum capacity
+- Expiration Time: Supported
+- Cache Elimination Policy: LRU-Like, Set method and Cycle Cleanup
+- GC Optimization: None
+- Persistent: None
+- Locking Mechanism: Slicing + Mutual Exclusion Locking
 
 ### Usage
 ```go
@@ -45,17 +53,16 @@ func main() {
 ```
 
 ### Benchmark
-- 10,000 elements
 - 1,000,000 elements
 ```
 go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: darwin
 goarch: arm64
 pkg: github.com/lxzan/memorycache/benchmark
-BenchmarkSet/10000-8            13830640                87.25 ns/op            0 B/op          0 allocs/op
-BenchmarkSet/1000000-8           3615801               326.6 ns/op            58 B/op          0 allocs/op
-BenchmarkGet/10000-8            14347058                82.28 ns/op            0 B/op          0 allocs/op
-BenchmarkGet/1000000-8           3899768               262.6 ns/op            54 B/op          0 allocs/op
+BenchmarkMemoryCache_Set-8   	 7038808	       153.9 ns/op	      26 B/op	       0 allocs/op
+BenchmarkMemoryCache_Get-8   	22969712	        50.92 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRistretto_Set-8     	13417420	       242.9 ns/op	     138 B/op	       2 allocs/op
+BenchmarkRistretto_Get-8     	15895714	        75.81 ns/op	      18 B/op	       1 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  13.037s
+ok  	github.com/lxzan/memorycache/benchmark	10.849s
 ```
