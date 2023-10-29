@@ -55,13 +55,14 @@ func main() {
 - 1,000,000 elements
 ```
 go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
-goos: darwin
-goarch: arm64
+goos: linux
+goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-BenchmarkMemoryCache_Set-8   	 9836241	       117.0 ns/op	      19 B/op	       0 allocs/op
-BenchmarkMemoryCache_Get-8   	17689178	        67.77 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRistretto_Set-8     	14112769	       256.2 ns/op	     135 B/op	       2 allocs/op
-BenchmarkRistretto_Get-8     	15645778	        77.72 ns/op	      18 B/op	       1 allocs/op
+cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
+BenchmarkMemoryCache_Set-12     11499579               101.7 ns/op            16 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-12     26326636                45.97 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-12       12341542               275.4 ns/op           119 B/op          2 allocs/op
+BenchmarkRistretto_Get-12       22825676                50.12 ns/op           16 B/op          1 allocs/op
 PASS
-ok  	github.com/lxzan/memorycache/benchmark	14.059s
+ok      github.com/lxzan/memorycache/benchmark  20.107s
 ```
