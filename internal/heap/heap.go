@@ -14,6 +14,13 @@ type Heap struct {
 
 func (c *Heap) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
 
+func (c *Heap) min(i, j int) int {
+	if c.Data[i].ExpireAt < c.Data[j].ExpireAt {
+		return i
+	}
+	return j
+}
+
 func (c *Heap) Len() int {
 	return len(c.Data)
 }
@@ -30,10 +37,12 @@ func (c *Heap) Push(ele *types.Element) {
 }
 
 func (c *Heap) Up(i int) {
-	var j = (i - 1) / 2
-	if j >= 0 && c.Less(i, j) {
-		c.Swap(i, j)
-		c.Up(j)
+	if i > 0 {
+		var j = (i - 1) >> 2
+		if c.Less(i, j) {
+			c.Swap(i, j)
+			c.Up(j)
+		}
 	}
 }
 
@@ -61,18 +70,27 @@ func (c *Heap) Delete(i int) {
 }
 
 func (c *Heap) Down(i, n int) {
-	var j = 2*i + 1
-	var k = 2*i + 2
-	var x = -1
-	if j < n {
-		x = j
+	var j = -1
+	var index1 = i<<2 + 1
+	var index2 = i<<2 + 2
+	var index3 = i<<2 + 3
+	var index4 = i<<2 + 4
+
+	if index1 >= n {
+		return
+	} else if index4 < n {
+		j = c.min(c.min(index1, index2), c.min(index3, index4))
+	} else if index3 < n {
+		j = c.min(c.min(index1, index2), index3)
+	} else if index2 < n {
+		j = c.min(index1, index2)
+	} else {
+		j = index1
 	}
-	if k < n && c.Less(k, j) {
-		x = k
-	}
-	if x != -1 && c.Less(x, i) {
-		c.Swap(i, x)
-		c.Down(x, n)
+
+	if j >= 0 && c.Less(j, i) {
+		c.Swap(i, j)
+		c.Down(j, n)
 	}
 }
 

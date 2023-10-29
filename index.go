@@ -67,6 +67,17 @@ func (c *MemoryCache) getExp(d time.Duration) int64 {
 	return time.Now().Add(d).UnixMilli()
 }
 
+// Clear 清空所有缓存
+// clear all caches
+func (c *MemoryCache) Clear() {
+	for _, b := range c.storage {
+		b.Lock()
+		b.Heap = heap.New(c.config.InitialSize)
+		b.Map = make(map[string]*types.Element, c.config.InitialSize)
+		b.Unlock()
+	}
+}
+
 // Set 设置键值和过期时间. exp<=0表示永不过期.
 // Set the key value and expiration time. exp<=0 means never expire.
 func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bool) {
@@ -137,15 +148,15 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 	return true
 }
 
-// Keys 获取前缀匹配的key. 可以通过星号获取所有的key.
-// Get prefix matching key,  You can get all the keys with an asterisk.
+// Keys 获取前缀匹配的key
+// Get prefix matching key
 func (c *MemoryCache) Keys(prefix string) []string {
 	var arr = make([]string, 0)
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
 		for _, v := range b.Heap.Data {
-			if !v.Expired(now) && (prefix == "*" || strings.HasPrefix(v.Key, prefix)) {
+			if !v.Expired(now) && strings.HasPrefix(v.Key, prefix) {
 				arr = append(arr, v.Key)
 			}
 		}
@@ -154,23 +165,13 @@ func (c *MemoryCache) Keys(prefix string) []string {
 	return arr
 }
 
-// Len 获取元素数量
+// Len 获取当前元素数量
 // Get the number of elements
-// @check: 是否检查过期时间 (whether to check expiration time)
-func (c *MemoryCache) Len(check bool) int {
+func (c *MemoryCache) Len() int {
 	var num = 0
-	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		if !check {
-			num += b.Heap.Len()
-		} else {
-			for _, v := range b.Heap.Data {
-				if !v.Expired(now) {
-					num++
-				}
-			}
-		}
+		num += b.Heap.Len()
 		b.Unlock()
 	}
 	return num
