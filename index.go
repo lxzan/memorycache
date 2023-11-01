@@ -1,8 +1,7 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/heap"
-	"github.com/lxzan/memorycache/internal/types"
+	"github.com/lxzan/memorycache/internal/utils"
 	"hash/maphash"
 	"math"
 	"strings"
@@ -11,7 +10,7 @@ import (
 )
 
 type MemoryCache struct {
-	config  *types.Config
+	config  *config
 	storage []*bucket
 	seed    maphash.Seed
 }
@@ -19,34 +18,42 @@ type MemoryCache struct {
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
 func New(options ...Option) *MemoryCache {
-	var config = &types.Config{}
+	var c = &config{}
 	options = append(options, withInitialize())
 	for _, fn := range options {
-		fn(config)
+		fn(c)
 	}
 
 	mc := &MemoryCache{
-		config:  config,
-		storage: make([]*bucket, config.BucketNum),
+		config:  c,
+		storage: make([]*bucket, c.BucketNum),
 		seed:    maphash.MakeSeed(),
 	}
 
 	for i, _ := range mc.storage {
 		mc.storage[i] = &bucket{
-			Map:  make(map[string]*types.Element, config.InitialSize),
-			Heap: heap.New(config.InitialSize),
+			Map:  make(map[string]*Element, c.InitialSize),
+			heap: newHeap(c.InitialSize),
 		}
 	}
 
 	go func() {
-		var ticker = time.NewTicker(config.Interval)
+		var d0 = c.MaxInterval
+		var ticker = time.NewTicker(d0)
 		defer ticker.Stop()
+
 		for {
 			<-ticker.C
 
+			var sum = 0
 			var now = time.Now().UnixMilli()
 			for _, b := range mc.storage {
-				b.expireTimeCheck(now, config.MaxKeysDeleted)
+				sum += b.expireTimeCheck(now, c.MaxKeysDeleted)
+			}
+
+			if d1 := utils.SelectValue(sum > c.BucketNum*c.MaxKeysDeleted*7/10, c.MinInterval, c.MaxInterval); d1 != d0 {
+				d0 = d1
+				ticker.Reset(d0)
 			}
 		}
 	}()
@@ -72,8 +79,8 @@ func (c *MemoryCache) getExp(d time.Duration) int64 {
 func (c *MemoryCache) Clear() {
 	for _, b := range c.storage {
 		b.Lock()
-		b.Heap = heap.New(c.config.InitialSize)
-		b.Map = make(map[string]*types.Element, c.config.InitialSize)
+		b.heap = newHeap(c.config.InitialSize)
+		b.Map = make(map[string]*Element, c.config.InitialSize)
 		b.Unlock()
 	}
 }
@@ -81,6 +88,12 @@ func (c *MemoryCache) Clear() {
 // Set 设置键值和过期时间. exp<=0表示永不过期.
 // Set the key value and expiration time. exp<=0 means never expire.
 func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bool) {
+	return c.SetWithCallback(key, value, exp, emptyCallbackFunc)
+}
+
+// SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会触发回调.
+// Set the key value, expiration time and callback function. The callback is triggered by both capacity overflow and expiration.
+func (c *MemoryCache) SetWithCallback(key string, value any, exp time.Duration, cb CallbackFunc) (replaced bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
@@ -90,15 +103,18 @@ func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bo
 	if ok {
 		v.Value = value
 		v.ExpireAt = expireAt
-		b.Heap.Down(v.Index, b.Heap.Len())
+		v.cb = cb
+		b.heap.Down(v.index, b.heap.Len())
 		return true
 	}
 
-	var ele = &types.Element{Key: key, Value: value, ExpireAt: expireAt}
-	b.Heap.Push(ele)
+	var ele = &Element{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
+	b.heap.Push(ele)
 	b.Map[key] = ele
-	if b.Heap.Len() > c.config.MaxCapacity {
-		delete(b.Map, b.Heap.Pop().Key)
+	if b.heap.Len() > c.config.MaxCapacity {
+		head := b.heap.Pop()
+		delete(b.Map, head.Key)
+		head.cb(head, ReasonOverflow)
 	}
 	return false
 }
@@ -109,26 +125,26 @@ func (c *MemoryCache) Get(key string) (any, bool) {
 	b.Lock()
 	v, exist := b.Map[key]
 	b.Unlock()
-	if !exist || v.Expired(time.Now().UnixMilli()) {
+	if !exist || v.expired(time.Now().UnixMilli()) {
 		return nil, false
 	}
 	return v.Value, true
 }
 
-// GetAndRefresh 获取. 如果存在, 刷新过期时间.
+// GetWithTTL 获取. 如果存在, 刷新过期时间.
 // Get a value. If it exists, refreshes the expiration time.
-func (c *MemoryCache) GetAndRefresh(key string, exp time.Duration) (any, bool) {
+func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (any, bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
 	v, exist := b.Map[key]
-	if !exist || v.Expired(time.Now().UnixMilli()) {
+	if !exist || v.expired(time.Now().UnixMilli()) {
 		return nil, false
 	}
 
 	v.ExpireAt = c.getExp(exp)
-	b.Heap.Down(v.Index, b.Heap.Len())
+	b.heap.Down(v.index, b.heap.Len())
 	return v, true
 }
 
@@ -143,7 +159,7 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 		return false
 	}
 
-	b.Heap.Delete(v.Index)
+	b.heap.Delete(v.index)
 	delete(b.Map, key)
 	return true
 }
@@ -155,8 +171,8 @@ func (c *MemoryCache) Keys(prefix string) []string {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		for _, v := range b.Heap.Data {
-			if !v.Expired(now) && strings.HasPrefix(v.Key, prefix) {
+		for _, v := range b.heap.Data {
+			if !v.expired(now) && strings.HasPrefix(v.Key, prefix) {
 				arr = append(arr, v.Key)
 			}
 		}
@@ -166,12 +182,12 @@ func (c *MemoryCache) Keys(prefix string) []string {
 }
 
 // Len 获取当前元素数量
-// Get the number of elements
+// Get the number of Elements
 func (c *MemoryCache) Len() int {
 	var num = 0
 	for _, b := range c.storage {
 		b.Lock()
-		num += b.Heap.Len()
+		num += b.heap.Len()
 		b.Unlock()
 	}
 	return num
@@ -179,17 +195,21 @@ func (c *MemoryCache) Len() int {
 
 type bucket struct {
 	sync.Mutex
-	Map  map[string]*types.Element
-	Heap *heap.Heap
+	Map  map[string]*Element
+	heap *heap
 }
 
 // 过期时间检查
-func (c *bucket) expireTimeCheck(now int64, num int) {
+func (c *bucket) expireTimeCheck(now int64, num int) int {
 	c.Lock()
 	defer c.Unlock()
 
-	for c.Heap.Len() > 0 && c.Heap.Front().Expired(now) && num > 0 {
-		delete(c.Map, c.Heap.Pop().Key)
-		num--
+	var sum = 0
+	for c.heap.Len() > 0 && c.heap.Front().expired(now) && sum < num {
+		head := c.heap.Pop()
+		delete(c.Map, head.Key)
+		sum++
+		head.cb(head, ReasonExpired)
 	}
+	return sum
 }

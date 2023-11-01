@@ -23,3 +23,10 @@ func Uniq[T comparable](arr []T) []T {
 	}
 	return list
 }
+
+func SelectValue[T any](ok bool, a, b T) T {
+	if ok {
+		return a
+	}
+	return b
+}

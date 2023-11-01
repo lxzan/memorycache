@@ -1,7 +1,6 @@
-package heap
+package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/types"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
@@ -10,10 +9,10 @@ import (
 
 func TestHeap_Sort(t *testing.T) {
 	var as = assert.New(t)
-	var h = New(0)
+	var h = newHeap(0)
 	for i := 0; i < 1000; i++ {
 		num := rand.Int63n(1000)
-		h.Push(&types.Element{ExpireAt: num})
+		h.Push(&Element{ExpireAt: num})
 	}
 
 	as.LessOrEqual(h.Front().ExpireAt, h.Data[1].ExpireAt)
@@ -34,17 +33,17 @@ func TestHeap_Sort(t *testing.T) {
 
 func TestHeap_Delete(t *testing.T) {
 	var as = assert.New(t)
-	var h = New(0)
-	h.Push(&types.Element{ExpireAt: 1})
-	h.Push(&types.Element{ExpireAt: 2})
-	h.Push(&types.Element{ExpireAt: 3})
-	h.Push(&types.Element{ExpireAt: 4})
-	h.Push(&types.Element{ExpireAt: 5})
-	h.Push(&types.Element{ExpireAt: 6})
-	h.Push(&types.Element{ExpireAt: 7})
-	h.Push(&types.Element{ExpireAt: 8})
-	h.Push(&types.Element{ExpireAt: 9})
-	h.Push(&types.Element{ExpireAt: 10})
+	var h = newHeap(0)
+	h.Push(&Element{ExpireAt: 1})
+	h.Push(&Element{ExpireAt: 2})
+	h.Push(&Element{ExpireAt: 3})
+	h.Push(&Element{ExpireAt: 4})
+	h.Push(&Element{ExpireAt: 5})
+	h.Push(&Element{ExpireAt: 6})
+	h.Push(&Element{ExpireAt: 7})
+	h.Push(&Element{ExpireAt: 8})
+	h.Push(&Element{ExpireAt: 9})
+	h.Push(&Element{ExpireAt: 10})
 	h.Delete(3)
 	h.Delete(5)
 

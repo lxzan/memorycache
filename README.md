@@ -11,10 +11,12 @@
 [4]: https://codecov.io/gh/lxzan/memorycache
 
 ### Description
+
 Minimalist in-memory KV storage, powered by hashmap and minimal quad heap, without optimizations for GC.
 Cache deprecation policy: the set method cleans up overflowed keys; the cycle cleans up expired keys.
 
 ### Principle
+
 - Storage Data Limit: Limited by maximum capacity
 - Expiration Time: Supported
 - Cache Elimination Policy: LRU-Like, Set method and Cycle Cleanup
@@ -23,6 +25,7 @@ Cache deprecation policy: the set method cleans up overflowed keys; the cycle cl
 - Locking Mechanism: Slicing + Mutual Exclusion Locking
 
 ### Usage
+
 ```go
 package main
 
@@ -34,17 +37,17 @@ import (
 
 func main() {
 	mc := memorycache.New(
-		memorycache.WithBucketNum(16),
-		memorycache.WithBucketSize(1000, 100000),
-		memorycache.WithInterval(100*time.Millisecond),
+		memorycache.WithBucketNum(128),
+		memorycache.WithBucketSize(1000, 10000),
+		memorycache.WithInterval(5*time.Second, 30*time.Second),
 	)
 
-	mc.Set("xxx", 1, 500*time.Millisecond)
+	mc.Set("xxx", 1, 10*time.Second)
 
 	val, exist := mc.Get("xxx")
 	fmt.Printf("val=%v, exist=%v\n", val, exist)
 
-	time.Sleep(time.Second)
+	time.Sleep(32 * time.Second)
 
 	val, exist = mc.Get("xxx")
 	fmt.Printf("val=%v, exist=%v\n", val, exist)
@@ -52,17 +55,18 @@ func main() {
 ```
 
 ### Benchmark
+
 - 1,000,000 elements
+
 ```
-go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
-goos: linux
+goos: windows
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
 cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
-BenchmarkMemoryCache_Set-12     11499579               101.7 ns/op            16 B/op          0 allocs/op
-BenchmarkMemoryCache_Get-12     26326636                45.97 ns/op            0 B/op          0 allocs/op
-BenchmarkRistretto_Set-12       12341542               275.4 ns/op           119 B/op          2 allocs/op
-BenchmarkRistretto_Get-12       22825676                50.12 ns/op           16 B/op          1 allocs/op
+BenchmarkMemoryCache_Set-12     14058852                73.00 ns/op           14 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-12     30767100                34.70 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-12       15583969               218.4 ns/op           114 B/op          2 allocs/op
+BenchmarkRistretto_Get-12       27272788                42.05 ns/op           16 B/op          1 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  20.107s
+ok      github.com/lxzan/memorycache/benchmark  17.232s
 ```

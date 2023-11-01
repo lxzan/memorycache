@@ -67,3 +67,8 @@ func TestRandomString(t *testing.T) {
 	Numeric.Uint32()
 	Numeric.Uint64()
 }
+
+func TestSelectValue(t *testing.T) {
+	assert.Equal(t, SelectValue(true, 1, 2), 1)
+	assert.Equal(t, SelectValue(false, 1, 2), 2)
+}

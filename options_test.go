@@ -21,12 +21,14 @@ func TestWithBucketNum(t *testing.T) {
 func TestWithInterval(t *testing.T) {
 	var as = assert.New(t)
 	{
-		var mc = New(WithInterval(0))
-		as.Equal(mc.config.Interval, defaultInterval)
+		var mc = New()
+		as.Equal(mc.config.MinInterval, defaultMinInterval)
+		as.Equal(mc.config.MaxInterval, defaultMaxInterval)
 	}
 	{
-		var mc = New(WithInterval(time.Second))
-		as.Equal(mc.config.Interval, time.Second)
+		var mc = New(WithInterval(time.Second, 2*time.Second))
+		as.Equal(mc.config.MinInterval, time.Second)
+		as.Equal(mc.config.MaxInterval, 2*time.Second)
 	}
 }
 
