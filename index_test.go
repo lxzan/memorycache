@@ -4,6 +4,7 @@ import (
 	"github.com/lxzan/memorycache/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
@@ -12,7 +13,7 @@ func TestNew(t *testing.T) {
 	var as = assert.New(t)
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithInterval(10 * time.Millisecond))
+		var db = New(WithInterval(10*time.Millisecond, 10*time.Millisecond))
 		db.Set("a", 1, 10*time.Millisecond)
 		db.Set("b", 1, 30*time.Millisecond)
 		db.Set("c", 1, 50*time.Millisecond)
@@ -25,7 +26,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithInterval(10 * time.Millisecond))
+		var db = New(WithInterval(10*time.Millisecond, 10*time.Millisecond))
 		db.Set("a", 1, 10*time.Millisecond)
 		db.Set("b", 1, 20*time.Millisecond)
 		db.Set("c", 1, 50*time.Millisecond)
@@ -38,7 +39,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var db = New(WithInterval(10 * time.Millisecond))
+		var db = New(WithInterval(10*time.Millisecond, 10*time.Millisecond))
 		db.Set("a", 1, 10*time.Millisecond)
 		db.Set("b", 1, 20*time.Millisecond)
 		db.Set("c", 1, 40*time.Millisecond)
@@ -53,7 +54,7 @@ func TestNew(t *testing.T) {
 func TestMemoryCache_Set(t *testing.T) {
 	var list []string
 	var count = 10000
-	var mc = New(WithInterval(100 * time.Millisecond))
+	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
 	mc.Clear()
 	for i := 0; i < count; i++ {
 		key := string(utils.AlphabetNumeric.Generate(8))
@@ -77,7 +78,7 @@ func TestMemoryCache_Get(t *testing.T) {
 	var list0 []string
 	var list1 []string
 	var count = 10000
-	var mc = New(WithInterval(100 * time.Millisecond))
+	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
 	for i := 0; i < count; i++ {
 		key := string(utils.AlphabetNumeric.Generate(8))
 		exp := rand.Intn(1000)
@@ -109,7 +110,7 @@ func TestMemoryCache_Get(t *testing.T) {
 func TestMemoryCache_GetAndRefresh(t *testing.T) {
 	var list []string
 	var count = 10000
-	var mc = New(WithInterval(100 * time.Millisecond))
+	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
 	for i := 0; i < count; i++ {
 		key := string(utils.AlphabetNumeric.Generate(8))
 		exp := rand.Intn(1000) + 200
@@ -118,7 +119,7 @@ func TestMemoryCache_GetAndRefresh(t *testing.T) {
 	}
 	var keys = mc.Keys("")
 	for _, key := range keys {
-		mc.GetAndRefresh(key, 2*time.Second)
+		mc.GetWithTTL(key, 2*time.Second)
 	}
 
 	time.Sleep(1100 * time.Millisecond)
@@ -129,13 +130,13 @@ func TestMemoryCache_GetAndRefresh(t *testing.T) {
 	}
 
 	mc.Delete(list[0])
-	_, ok := mc.GetAndRefresh(list[0], -1)
+	_, ok := mc.GetWithTTL(list[0], -1)
 	assert.False(t, ok)
 }
 
 func TestMemoryCache_Delete(t *testing.T) {
 	var count = 10000
-	var mc = New(WithInterval(100 * time.Millisecond))
+	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
 	for i := 0; i < count; i++ {
 		key := string(utils.AlphabetNumeric.Generate(8))
 		exp := rand.Intn(1000) + 200
@@ -158,12 +159,40 @@ func TestMaxCap(t *testing.T) {
 	var mc = New(
 		WithBucketNum(1),
 		WithBucketSize(10, 100),
-		WithInterval(100*time.Millisecond),
+		WithInterval(100*time.Millisecond, 100*time.Millisecond),
 	)
+	var wg = &sync.WaitGroup{}
+	wg.Add(900)
 	for i := 0; i < 1000; i++ {
-		key := string(utils.AlphabetNumeric.Generate(8))
-		mc.Set(key, 1, -1)
+		key := string(utils.AlphabetNumeric.Generate(16))
+		mc.SetWithCallback(key, 1, -1, func(ele *Element, reason Reason) {
+			assert.Equal(t, reason, ReasonOverflow)
+			wg.Done()
+		})
 	}
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, mc.Len(), 100)
+	wg.Wait()
+}
+
+func TestMemoryCache_SetWithCallback(t *testing.T) {
+	var as = assert.New(t)
+	var count = 1000
+	var mc = New(
+		WithBucketNum(16),
+		WithInterval(10*time.Millisecond, 100*time.Millisecond),
+	)
+
+	var wg = &sync.WaitGroup{}
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		key := string(utils.AlphabetNumeric.Generate(16))
+		exp := time.Duration(rand.Intn(1000)+10) * time.Millisecond
+		mc.SetWithCallback(key, i, exp, func(ele *Element, reason Reason) {
+			as.True(time.Now().UnixMilli() > ele.ExpireAt)
+			as.Equal(reason, ReasonExpired)
+			wg.Done()
+		})
+	}
+	wg.Wait()
 }

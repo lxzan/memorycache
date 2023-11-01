@@ -1,52 +1,48 @@
-package heap
+package memorycache
 
-import "github.com/lxzan/memorycache/internal/types"
-
-// New 新建一个堆
+// newHeap 新建一个堆
 // Create a new heap
-func New(cap int) *Heap {
-	return &Heap{Data: make([]*types.Element, 0, cap)}
+func newHeap(cap int) *heap {
+	return &heap{Data: make([]*Element, 0, cap)}
 }
 
-type Heap struct {
-	Data []*types.Element
+type heap struct {
+	Data []*Element
 }
 
-func (c *Heap) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
+func (c *heap) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
 
-func (c *Heap) min(i, j int) int {
+func (c *heap) min(i, j int) int {
 	if c.Data[i].ExpireAt < c.Data[j].ExpireAt {
 		return i
 	}
 	return j
 }
 
-func (c *Heap) Len() int {
+func (c *heap) Len() int {
 	return len(c.Data)
 }
 
-func (c *Heap) Swap(i, j int) {
-	c.Data[i].Index, c.Data[j].Index = c.Data[j].Index, c.Data[i].Index
+func (c *heap) Swap(i, j int) {
+	c.Data[i].index, c.Data[j].index = c.Data[j].index, c.Data[i].index
 	c.Data[i], c.Data[j] = c.Data[j], c.Data[i]
 }
 
-func (c *Heap) Push(ele *types.Element) {
-	ele.Index = c.Len()
+func (c *heap) Push(ele *Element) {
+	ele.index = c.Len()
 	c.Data = append(c.Data, ele)
 	c.Up(c.Len() - 1)
 }
 
-func (c *Heap) Up(i int) {
-	if i > 0 {
-		var j = (i - 1) >> 2
-		if c.Less(i, j) {
-			c.Swap(i, j)
-			c.Up(j)
-		}
+func (c *heap) Up(i int) {
+	var j = (i - 1) >> 2
+	if i >= 1 && c.Less(i, j) {
+		c.Swap(i, j)
+		c.Up(j)
 	}
 }
 
-func (c *Heap) Pop() (ele *types.Element) {
+func (c *heap) Pop() (ele *Element) {
 	var n = c.Len()
 	switch n {
 	case 0:
@@ -62,23 +58,25 @@ func (c *Heap) Pop() (ele *types.Element) {
 	return
 }
 
-func (c *Heap) Delete(i int) {
+func (c *heap) Delete(i int) {
 	n := c.Len()
 	c.Swap(i, n-1)
 	c.Data = c.Data[:n-1]
 	c.Down(i, n-1)
 }
 
-func (c *Heap) Down(i, n int) {
-	var j = -1
+func (c *heap) Down(i, n int) {
 	var index1 = i<<2 + 1
+	if index1 >= n {
+		return
+	}
+
 	var index2 = i<<2 + 2
 	var index3 = i<<2 + 3
 	var index4 = i<<2 + 4
+	var j = -1
 
-	if index1 >= n {
-		return
-	} else if index4 < n {
+	if index4 < n {
 		j = c.min(c.min(index1, index2), c.min(index3, index4))
 	} else if index3 < n {
 		j = c.min(c.min(index1, index2), index3)
@@ -95,7 +93,7 @@ func (c *Heap) Down(i, n int) {
 }
 
 // Front 访问堆顶元素
-// Accessing the top element of the heap
-func (c *Heap) Front() *types.Element {
+// Accessing the top Element of the heap
+func (c *heap) Front() *Element {
 	return c.Data[0]
 }

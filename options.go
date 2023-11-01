@@ -1,59 +1,68 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/types"
 	"github.com/lxzan/memorycache/internal/utils"
 	"time"
 )
 
 const (
 	defaultBucketNum      = 16
-	defaultInterval       = 30 * time.Second
+	defaultMinInterval    = 5 * time.Second
+	defaultMaxInterval    = 30 * time.Second
 	defaultMaxKeysDeleted = 1000
 	defaultInitialSize    = 1000
 	defaultMaxCapacity    = 100000
 )
 
-type Option func(c *types.Config)
+type Option func(c *config)
 
 // WithBucketNum 设置存储桶数量
+// Setting the number of storage buckets
 func WithBucketNum(num int) Option {
-	return func(c *types.Config) {
+	return func(c *config) {
 		c.BucketNum = num
 	}
 }
 
-// WithMaxKeysDeleted (单个存储桶)设置每次TTL检查最大删除key数量
+// WithMaxKeysDeleted 设置每次TTL检查最大删除key数量. (单个存储桶)
+// Set the maximum number of keys to be deleted per TTL check (single bucket)
 func WithMaxKeysDeleted(num int) Option {
-	return func(c *types.Config) {
+	return func(c *config) {
 		c.MaxKeysDeleted = num
 	}
 }
 
-// WithBucketSize (单个存储桶)设置初始化大小, 最大容量. 超过最大容量会被定期清除.
+// WithBucketSize 设置初始化大小和最大容量. 超过最大容量会被清除. (单个存储桶)
+// Set the initial size and maximum capacity. Exceeding the maximum capacity will be erased. (Single bucket)
 func WithBucketSize(size, cap int) Option {
-	return func(c *types.Config) {
+	return func(c *config) {
 		c.InitialSize = size
 		c.MaxCapacity = cap
 	}
 }
 
 // WithInterval 设置TTL检查周期
-func WithInterval(d time.Duration) Option {
-	return func(c *types.Config) {
-		c.Interval = d
+// Setting the TTL check period
+func WithInterval(min, max time.Duration) Option {
+	return func(c *config) {
+		c.MinInterval = min
+		c.MaxInterval = max
 	}
 }
 
 func withInitialize() Option {
-	return func(c *types.Config) {
+	return func(c *config) {
 		if c.BucketNum <= 0 {
 			c.BucketNum = defaultBucketNum
 		}
 		c.BucketNum = utils.ToBinaryNumber(c.BucketNum)
 
-		if c.Interval <= 0 {
-			c.Interval = defaultInterval
+		if c.MinInterval <= 0 {
+			c.MinInterval = defaultMinInterval
+		}
+
+		if c.MaxInterval <= 0 {
+			c.MaxInterval = defaultMaxInterval
 		}
 
 		if c.MaxKeysDeleted <= 0 {
