@@ -145,7 +145,7 @@ func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (any, bool) {
 
 	v.ExpireAt = c.getExp(exp)
 	b.heap.Down(v.index, b.heap.Len())
-	return v, true
+	return v.Value, true
 }
 
 // Delete
@@ -161,6 +161,7 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 
 	b.heap.Delete(v.index)
 	delete(b.Map, key)
+	v.cb(v, ReasonDeleted)
 	return true
 }
 

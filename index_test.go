@@ -135,24 +135,41 @@ func TestMemoryCache_GetAndRefresh(t *testing.T) {
 }
 
 func TestMemoryCache_Delete(t *testing.T) {
-	var count = 10000
-	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
-	for i := 0; i < count; i++ {
-		key := string(utils.AlphabetNumeric.Generate(8))
-		exp := rand.Intn(1000) + 200
-		mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
-	}
+	t.Run("1", func(t *testing.T) {
+		var count = 10000
+		var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		for i := 0; i < count; i++ {
+			key := string(utils.AlphabetNumeric.Generate(8))
+			exp := rand.Intn(1000) + 200
+			mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
+		}
 
-	var keys = mc.Keys("")
-	for i := 0; i < 100; i++ {
-		deleted := mc.Delete(keys[i])
-		assert.True(t, deleted)
+		var keys = mc.Keys("")
+		for i := 0; i < 100; i++ {
+			deleted := mc.Delete(keys[i])
+			assert.True(t, deleted)
 
-		key := string(utils.AlphabetNumeric.Generate(8))
-		deleted = mc.Delete(key)
-		assert.False(t, deleted)
-	}
-	assert.Equal(t, mc.Len(), count-100)
+			key := string(utils.AlphabetNumeric.Generate(8))
+			deleted = mc.Delete(key)
+			assert.False(t, deleted)
+		}
+		assert.Equal(t, mc.Len(), count-100)
+	})
+
+	t.Run("2", func(t *testing.T) {
+		var mc = New()
+		var wg = &sync.WaitGroup{}
+		wg.Add(1)
+		mc.SetWithCallback("ming", 1, -1, func(ele *Element, reason Reason) {
+			assert.Equal(t, reason, ReasonDeleted)
+			wg.Done()
+		})
+		mc.SetWithCallback("ting", 2, -1, func(ele *Element, reason Reason) {
+			wg.Done()
+		})
+		go mc.Delete("ming")
+		wg.Wait()
+	})
 }
 
 func TestMaxCap(t *testing.T) {
