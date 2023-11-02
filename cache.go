@@ -1,12 +1,13 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
 	"hash/maphash"
 	"math"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lxzan/memorycache/internal/utils"
 )
 
 type MemoryCache struct {
@@ -26,7 +27,7 @@ func New(options ...Option) *MemoryCache {
 
 	mc := &MemoryCache{
 		config:  c,
-		storage: make([]*bucket, c.BucketNum),
+		storage: make([]*bucket, c.BucketNum), // 2^n
 		seed:    maphash.MakeSeed(),
 	}
 
@@ -140,6 +141,42 @@ func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (any, bool) {
 
 	v, exist := b.Map[key]
 	if !exist || v.expired(time.Now().UnixMilli()) {
+		return nil, false
+	}
+
+	v.ExpireAt = c.getExp(exp)
+	b.heap.Down(v.index, b.heap.Len())
+	return v.Value, true
+}
+
+// GetOrCreate 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
+// Get or create a value. If it exists, refreshes the expiration time. If it does not exist, creates a new one.
+func (c *MemoryCache) GetOrCreate(key string, value any, exp time.Duration) (any, bool) {
+	return c.GetOrCreateWithCallback(key, value, exp, emptyCallbackFunc)
+}
+
+// GetOrCreate 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
+// Get or create a value with CallbackFunc. If it exists, refreshes the expiration time. If it does not exist, creates a new one.
+func (c *MemoryCache) GetOrCreateWithCallback(key string, value any, exp time.Duration, cb CallbackFunc) (any, bool) {
+	var b = c.getBucket(key)
+	b.Lock()
+	defer b.Unlock()
+
+	v, exist := b.Map[key]
+	if !exist {
+		expireAt := c.getExp(exp)
+		ele := &Element{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
+		b.heap.Push(ele)
+		b.Map[key] = ele
+		if b.heap.Len() > c.config.MaxCapacity {
+			head := b.heap.Pop()
+			delete(b.Map, head.Key)
+			head.cb(head, ReasonOverflow)
+		}
+		return value, true
+	}
+
+	if v.expired(time.Now().UnixMilli()) {
 		return nil, false
 	}
 

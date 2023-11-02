@@ -1,8 +1,10 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
+	"math"
 	"time"
+
+	"github.com/lxzan/memorycache/internal/utils"
 )
 
 const (
@@ -52,7 +54,7 @@ func WithInterval(min, max time.Duration) Option {
 
 func withInitialize() Option {
 	return func(c *config) {
-		if c.BucketNum <= 0 {
+		if c.BucketNum <= 0 || c.BucketNum > math.MaxInt8 {
 			c.BucketNum = defaultBucketNum
 		}
 		c.BucketNum = utils.ToBinaryNumber(c.BucketNum)
