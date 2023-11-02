@@ -1,19 +1,30 @@
 package memorycache
 
 import (
+	"context"
 	"hash/maphash"
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lxzan/memorycache/internal/utils"
 )
 
+type Timer struct {
+	now atomic.Int64
+}
+
 type MemoryCache struct {
-	config  *config
-	storage []*bucket
-	seed    maphash.Seed
+	config    *config
+	storage   []*bucket
+	seed      maphash.Seed
+	timer     Timer
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	closeOnce sync.Once
 }
 
 // New 创建缓存数据库实例
@@ -26,10 +37,16 @@ func New(options ...Option) *MemoryCache {
 	}
 
 	mc := &MemoryCache{
-		config:  c,
-		storage: make([]*bucket, c.BucketNum), // 2^n
-		seed:    maphash.MakeSeed(),
+		config:    c,
+		storage:   make([]*bucket, c.BucketNum),
+		seed:      maphash.MakeSeed(),
+		timer:     Timer{now: atomic.Int64{}},
+		wg:        sync.WaitGroup{},
+		closeOnce: sync.Once{},
 	}
+
+	mc.ctx, mc.cancel = context.WithCancel(context.Background())
+	mc.timer.now.Store(time.Now().UnixMilli())
 
 	for i, _ := range mc.storage {
 		mc.storage[i] = &bucket{
@@ -38,28 +55,63 @@ func New(options ...Option) *MemoryCache {
 		}
 	}
 
+	mc.wg.Add(2)
+
 	go func() {
 		var d0 = c.MaxInterval
 		var ticker = time.NewTicker(d0)
-		defer ticker.Stop()
+		defer func() {
+			ticker.Stop()
+			mc.wg.Done()
+		}()
 
 		for {
-			<-ticker.C
+			select {
+			case <-mc.ctx.Done():
+				return
 
-			var sum = 0
-			var now = time.Now().UnixMilli()
-			for _, b := range mc.storage {
-				sum += b.expireTimeCheck(now, c.MaxKeysDeleted)
+			case <-ticker.C:
+				var sum = 0
+				var now = time.Now().UnixMilli()
+				for _, b := range mc.storage {
+					sum += b.expireTimeCheck(now, c.MaxKeysDeleted)
+				}
+
+				if d1 := utils.SelectValue(sum > c.BucketNum*c.MaxKeysDeleted*7/10, c.MinInterval, c.MaxInterval); d1 != d0 {
+					d0 = d1
+					ticker.Reset(d0)
+				}
 			}
+		}
+	}()
 
-			if d1 := utils.SelectValue(sum > c.BucketNum*c.MaxKeysDeleted*7/10, c.MinInterval, c.MaxInterval); d1 != d0 {
-				d0 = d1
-				ticker.Reset(d0)
+	go func() {
+		var ticker = time.NewTicker(time.Second)
+
+		defer func() {
+			ticker.Stop()
+			mc.wg.Done()
+		}()
+
+		for {
+			select {
+			case <-mc.ctx.Done():
+				return
+
+			case <-ticker.C:
+				mc.timer.now.Store(time.Now().UnixMilli())
 			}
 		}
 	}()
 
 	return mc
+}
+
+func (c *MemoryCache) Close() {
+	c.closeOnce.Do(func() {
+		c.cancel()
+		c.wg.Wait()
+	})
 }
 
 func (c *MemoryCache) getBucket(key string) *bucket {
@@ -72,7 +124,8 @@ func (c *MemoryCache) getExp(d time.Duration) int64 {
 	if d <= 0 {
 		return math.MaxInt
 	}
-	return time.Now().Add(d).UnixMilli()
+
+	return c.timer.now.Load() + d.Milliseconds()
 }
 
 // Clear 清空所有缓存
@@ -126,7 +179,7 @@ func (c *MemoryCache) Get(key string) (any, bool) {
 	b.Lock()
 	v, exist := b.Map[key]
 	b.Unlock()
-	if !exist || v.expired(time.Now().UnixMilli()) {
+	if !exist || v.expired(c.timer.now.Load()) {
 		return nil, false
 	}
 	return v.Value, true
@@ -140,7 +193,7 @@ func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (any, bool) {
 	defer b.Unlock()
 
 	v, exist := b.Map[key]
-	if !exist || v.expired(time.Now().UnixMilli()) {
+	if !exist || v.expired(c.timer.now.Load()) {
 		return nil, false
 	}
 
@@ -176,7 +229,7 @@ func (c *MemoryCache) GetOrCreateWithCallback(key string, value any, exp time.Du
 		return value, true
 	}
 
-	if v.expired(time.Now().UnixMilli()) {
+	if v.expired(c.timer.now.Load()) {
 		return nil, false
 	}
 
