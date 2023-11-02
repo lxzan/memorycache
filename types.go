@@ -8,6 +8,7 @@ type Reason uint8
 const (
 	ReasonExpired  = Reason(0)
 	ReasonOverflow = Reason(1)
+	ReasonDeleted  = Reason(2)
 )
 
 type CallbackFunc func(ele *Element, reason Reason)
