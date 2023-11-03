@@ -1,12 +1,13 @@
 package benchmark
 
 import (
-	"github.com/dgraph-io/ristretto"
-	"github.com/lxzan/memorycache"
-	"github.com/lxzan/memorycache/internal/utils"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/ristretto"
+	"github.com/lxzan/memorycache"
+	"github.com/lxzan/memorycache/internal/utils"
 )
 
 const benchcount = 1000000
@@ -48,6 +49,20 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 		for pb.Next() {
 			index := i.Add(1) % benchcount
 			mc.Get(benchkeys[index])
+		}
+	})
+}
+
+func BenchmarkMemoryCache_GetOrCreate(b *testing.B) {
+	var mc = memorycache.New(
+		memorycache.WithBucketNum(128),
+		memorycache.WithBucketSize(1000, 10000),
+	)
+	var i = atomic.Int64{}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			index := i.Add(1) % benchcount
+			mc.GetOrCreate(benchkeys[index], 1, time.Hour)
 		}
 	})
 }

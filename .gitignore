@@ -4,3 +4,4 @@ vendor/
 examples/
 bin/
 go.work
+.DS_Store

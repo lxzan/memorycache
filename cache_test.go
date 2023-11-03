@@ -1,12 +1,13 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lxzan/memorycache/internal/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNew(t *testing.T) {
@@ -170,6 +171,21 @@ func TestMemoryCache_Delete(t *testing.T) {
 		go mc.Delete("ming")
 		wg.Wait()
 	})
+
+	t.Run("3", func(t *testing.T) {
+		var mc = New()
+		var wg = &sync.WaitGroup{}
+		wg.Add(1)
+		mc.GetOrCreateWithCallback("ming", 1, -1, func(ele *Element, reason Reason) {
+			assert.Equal(t, reason, ReasonDeleted)
+			wg.Done()
+		})
+		mc.GetOrCreateWithCallback("ting", 2, -1, func(ele *Element, reason Reason) {
+			wg.Done()
+		})
+		go mc.Delete("ting")
+		wg.Wait()
+	})
 }
 
 func TestMaxCap(t *testing.T) {
@@ -178,6 +194,7 @@ func TestMaxCap(t *testing.T) {
 		WithBucketSize(10, 100),
 		WithInterval(100*time.Millisecond, 100*time.Millisecond),
 	)
+
 	var wg = &sync.WaitGroup{}
 	wg.Add(900)
 	for i := 0; i < 1000; i++ {
@@ -199,6 +216,7 @@ func TestMemoryCache_SetWithCallback(t *testing.T) {
 		WithBucketNum(16),
 		WithInterval(10*time.Millisecond, 100*time.Millisecond),
 	)
+	defer mc.Clear()
 
 	var wg = &sync.WaitGroup{}
 	wg.Add(count)
@@ -206,6 +224,45 @@ func TestMemoryCache_SetWithCallback(t *testing.T) {
 		key := string(utils.AlphabetNumeric.Generate(16))
 		exp := time.Duration(rand.Intn(1000)+10) * time.Millisecond
 		mc.SetWithCallback(key, i, exp, func(ele *Element, reason Reason) {
+			as.True(time.Now().UnixMilli() > ele.ExpireAt)
+			as.Equal(reason, ReasonExpired)
+			wg.Done()
+		})
+	}
+	wg.Wait()
+}
+
+func TestMemoryCache_GetOrCreate(t *testing.T) {
+
+	var count = 1000
+	var mc = New(
+		WithBucketNum(16),
+		WithInterval(10*time.Millisecond, 100*time.Millisecond),
+	)
+	defer mc.Clear()
+
+	for i := 0; i < count; i++ {
+		key := string(utils.AlphabetNumeric.Generate(16))
+		exp := time.Duration(rand.Intn(1000)+10) * time.Millisecond
+		mc.GetOrCreate(key, i, exp)
+	}
+}
+
+func TestMemoryCache_GetOrCreateWithCallback(t *testing.T) {
+	var as = assert.New(t)
+	var count = 1000
+	var mc = New(
+		WithBucketNum(16),
+		WithInterval(10*time.Millisecond, 100*time.Millisecond),
+	)
+	defer mc.Clear()
+
+	var wg = &sync.WaitGroup{}
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		key := string(utils.AlphabetNumeric.Generate(16))
+		exp := time.Duration(rand.Intn(1000)+10) * time.Millisecond
+		mc.GetOrCreateWithCallback(key, i, exp, func(ele *Element, reason Reason) {
 			as.True(time.Now().UnixMilli() > ele.ExpireAt)
 			as.Equal(reason, ReasonExpired)
 			wg.Done()

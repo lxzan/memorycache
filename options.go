@@ -1,8 +1,9 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
 	"time"
+
+	"github.com/lxzan/memorycache/internal/utils"
 )
 
 const (
