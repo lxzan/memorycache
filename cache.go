@@ -186,8 +186,8 @@ func (c *MemoryCache) Get(key string) (v any, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
-	result, exist := c.fetch(c.getBucket(key), key)
-	if !exist {
+	result, ok := c.fetch(c.getBucket(key), key)
+	if !ok {
 		return nil, false
 	}
 	return result.Value, true
@@ -200,8 +200,8 @@ func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (v any, exist bo
 	b.Lock()
 	defer b.Unlock()
 
-	result, exist := c.fetch(c.getBucket(key), key)
-	if !exist {
+	result, ok := c.fetch(c.getBucket(key), key)
+	if !ok {
 		return nil, false
 	}
 
@@ -244,7 +244,7 @@ func (c *MemoryCache) Delete(key string) (deleted bool) {
 	b.Lock()
 	defer b.Unlock()
 
-	v, ok := b.Map[key]
+	v, ok := c.fetch(b, key)
 	if !ok {
 		return false
 	}
