@@ -13,7 +13,7 @@ const (
 
 type CallbackFunc func(ele *Element, reason Reason)
 
-var emptyCallbackFunc CallbackFunc = func(ele *Element, reason Reason) {}
+var emptyCallback CallbackFunc = func(ele *Element, reason Reason) {}
 
 type Element struct {
 	// 索引
