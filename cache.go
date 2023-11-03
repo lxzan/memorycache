@@ -208,7 +208,7 @@ func (c *MemoryCache) GetOrCreate(key string, value any, exp time.Duration) (any
 	return c.GetOrCreateWithCallback(key, value, exp, emptyCallbackFunc)
 }
 
-// GetOrCreate 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
+// GetOrCreateWithCallback 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
 // Get or create a value with CallbackFunc. If it exists, refreshes the expiration time. If it does not exist, creates a new one.
 func (c *MemoryCache) GetOrCreateWithCallback(key string, value any, exp time.Duration, cb CallbackFunc) (any, bool) {
 	var b = c.getBucket(key)
@@ -225,6 +225,7 @@ func (c *MemoryCache) GetOrCreateWithCallback(key string, value any, exp time.Du
 			head := b.heap.Pop()
 			delete(b.Map, head.Key)
 			head.cb(head, ReasonOverflow)
+			return nil, false
 		}
 		return value, true
 	}
