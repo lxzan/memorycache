@@ -1,10 +1,11 @@
 package memorycache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHeap_Sort(t *testing.T) {

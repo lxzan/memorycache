@@ -2,13 +2,14 @@ package memorycache
 
 import (
 	"context"
-	"github.com/lxzan/memorycache/internal/utils"
 	"hash/maphash"
 	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/lxzan/memorycache/internal/utils"
 )
 
 type MemoryCache struct {
@@ -59,11 +60,10 @@ func New(options ...Option) *MemoryCache {
 			case <-mc.ctx.Done():
 				mc.wg.Done()
 				return
-			case <-ticker.C:
+			case now := <-ticker.C:
 				var sum = 0
-				var now = time.Now().UnixMilli()
 				for _, b := range mc.storage {
-					sum += b.ExpireCheck(now, c.MaxKeysDeleted)
+					sum += b.ExpireCheck(now.UnixMilli(), c.MaxKeysDeleted)
 				}
 
 				// 删除数量超过阈值, 缩小时间间隔
@@ -85,8 +85,8 @@ func New(options ...Option) *MemoryCache {
 			case <-mc.ctx.Done():
 				mc.wg.Done()
 				return
-			case <-ticker.C:
-				mc.timestamp.Store(time.Now().UnixMilli())
+			case now := <-ticker.C:
+				mc.timestamp.Store(now.UnixMilli())
 			}
 		}
 	}()

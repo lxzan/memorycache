@@ -1,9 +1,10 @@
 package memorycache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWithBucketNum(t *testing.T) {

@@ -1,10 +1,11 @@
 package utils
 
 import (
-	"github.com/stretchr/testify/assert"
 	"hash/fnv"
 	"hash/maphash"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkHash_Fnv64(b *testing.B) {
