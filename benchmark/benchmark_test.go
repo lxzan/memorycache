@@ -53,20 +53,6 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 	})
 }
 
-func BenchmarkMemoryCache_GetOrCreate(b *testing.B) {
-	var mc = memorycache.New(
-		memorycache.WithBucketNum(128),
-		memorycache.WithBucketSize(1000, 10000),
-	)
-	var i = atomic.Int64{}
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			index := i.Add(1) % benchcount
-			mc.GetOrCreate(benchkeys[index], 1, time.Hour)
-		}
-	})
-}
-
 func BenchmarkRistretto_Set(b *testing.B) {
 	var mc, _ = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M).
