@@ -33,7 +33,7 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`, w
 -   No third-party dependencies
 -   High performance
 -   Low memory usage
--   Use Quad Heap to reduce height and increase write speeds
+-   Use quadruple heap to maintain the expiration time, effectively reduce the height of the tree, and improve the insertion performance
 
 ### Methods
 
