@@ -1,6 +1,7 @@
 <div align="center">
     <h1>MemoryCache</h1>
     <img src="assets/logo.png" alt="logo" width="300px">
+    <h5>To the time to life, rather than to life in time.</h5>
 </div>
 
 [![Build Status][1]][2] [![codecov][3]][4]
@@ -23,7 +24,7 @@
 
 1. 存储数据限制：受最大容量限制
 2. 过期时间：支持
-3. 缓存淘汰策略：类似LRU
+3. 缓存淘汰策略：类似 LRU
 4. GC 优化：无
 5. 持久化：无
 6. 锁定机制：分片和互斥锁

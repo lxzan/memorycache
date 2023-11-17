@@ -1,6 +1,7 @@
 <div align="center">
     <h1>MemoryCache</h1>
     <img src="assets/logo.png" alt="logo" width="300px">
+    <h5>To the time to life, rather than to life in time.</h5>
 </div>
 
 
