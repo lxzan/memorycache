@@ -1,4 +1,9 @@
-# MemoryCache
+<div align="center">
+    <h1>MemoryCache</h1>
+    <img src="assets/logo.png" alt="logo" width="300px">
+    <h5>To the time to life, rather than to life in time.</h5>
+</div>
+
 
 [中文](README_CN.md)
 
@@ -84,7 +89,7 @@ func main() {
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-cpu: AMD EPYC 7763 64-Core Processor                
+cpu: AMD EPYC 7763 64-Core Processor
 BenchmarkMemoryCache_Set-4      11106261    100.6 ns/op	      18 B/op	       0 allocs/op
 BenchmarkMemoryCache_Get-4      635988      77.30 ns/op	       0 B/op	       0 allocs/op
 BenchmarkRistretto_Set-4        7933663     491.8 ns/op	     170 B/op	       2 allocs/op
