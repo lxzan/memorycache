@@ -59,10 +59,22 @@ func (c *heap) Pop() (ele *Element) {
 }
 
 func (c *heap) Delete(i int) {
-	n := c.Len()
-	c.Swap(i, n-1)
-	c.Data = c.Data[:n-1]
-	c.Down(i, n-1)
+	var n = c.Len()
+	switch n {
+	case 1:
+		c.Data = c.Data[:0]
+	default:
+		var down = c.Data[n-1].ExpireAt > c.Data[i].ExpireAt
+		c.Swap(i, n-1)
+		c.Data = c.Data[:n-1]
+		if i < n-1 {
+			if down {
+				c.Down(i, n-1)
+			} else {
+				c.Up(i)
+			}
+		}
+	}
 }
 
 func (c *heap) Down(i, n int) {
