@@ -168,9 +168,8 @@ func (c *MemoryCache) SetWithCallback(key string, value any, exp time.Duration, 
 	v, ok := c.fetch(b, key)
 	if ok {
 		v.Value = value
-		v.ExpireAt = expireAt
 		v.cb = cb
-		b.Heap.Down(v.index, b.Heap.Len())
+		b.Heap.UpdateTTL(v, expireAt)
 		return true
 	}
 
@@ -205,8 +204,7 @@ func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (v any, exist bo
 		return nil, false
 	}
 
-	result.ExpireAt = c.getExp(exp)
-	b.Heap.Down(result.index, b.Heap.Len())
+	b.Heap.UpdateTTL(result, c.getExp(exp))
 	return result.Value, true
 }
 

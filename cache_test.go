@@ -2,6 +2,8 @@ package memorycache
 
 import (
 	"math/rand"
+	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -140,6 +142,40 @@ func TestMemoryCache_Set(t *testing.T) {
 		mc.Set("feng", 1, 2*time.Hour)
 		assert.ElementsMatch(t, mc.Keys(""), []string{"ming", "feng"})
 	})
+
+	t.Run("update ttl", func(t *testing.T) {
+		var mc = New(WithBucketNum(1))
+		var count = 1000
+		for i := 0; i < 10*count; i++ {
+			key := strconv.Itoa(utils.Numeric.Intn(count))
+			exp := time.Duration(utils.Numeric.Intn(count)+10) * time.Second
+			mc.Set(key, 1, exp)
+		}
+
+		var list1 []int
+		var list2 []int
+		for _, b := range mc.storage {
+			b.Lock()
+			for _, item := range b.Heap.Data {
+				list1 = append(list1, int(item.ExpireAt))
+			}
+			b.Unlock()
+		}
+		sort.Ints(list1)
+
+		for _, b := range mc.storage {
+			b.Lock()
+			for b.Heap.Len() > 0 {
+				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+			}
+			b.Unlock()
+		}
+
+		assert.Equal(t, len(list1), len(list2))
+		for i, v := range list2 {
+			assert.Equal(t, list1[i], v)
+		}
+	})
 }
 
 func TestMemoryCache_Get(t *testing.T) {
@@ -199,30 +235,72 @@ func TestMemoryCache_Get(t *testing.T) {
 }
 
 func TestMemoryCache_GetWithTTL(t *testing.T) {
-	var list []string
-	var count = 10000
-	var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
-	for i := 0; i < count; i++ {
-		key := string(utils.AlphabetNumeric.Generate(8))
-		exp := rand.Intn(1000) + 200
-		list = append(list, key)
-		mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
-	}
-	var keys = mc.Keys("")
-	for _, key := range keys {
-		mc.GetWithTTL(key, 2*time.Second)
-	}
+	t.Run("", func(t *testing.T) {
+		var list []string
+		var count = 10000
+		var mc = New(WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		for i := 0; i < count; i++ {
+			key := string(utils.AlphabetNumeric.Generate(8))
+			exp := rand.Intn(1000) + 200
+			list = append(list, key)
+			mc.Set(key, 1, time.Duration(exp)*time.Millisecond)
+		}
+		var keys = mc.Keys("")
+		for _, key := range keys {
+			mc.GetWithTTL(key, 2*time.Second)
+		}
 
-	time.Sleep(1100 * time.Millisecond)
+		time.Sleep(1100 * time.Millisecond)
 
-	for _, item := range list {
-		_, ok := mc.Get(item)
-		assert.True(t, ok)
-	}
+		for _, item := range list {
+			_, ok := mc.Get(item)
+			assert.True(t, ok)
+		}
 
-	mc.Delete(list[0])
-	_, ok := mc.GetWithTTL(list[0], -1)
-	assert.False(t, ok)
+		mc.Delete(list[0])
+		_, ok := mc.GetWithTTL(list[0], -1)
+		assert.False(t, ok)
+	})
+
+	t.Run("update ttl", func(t *testing.T) {
+		var mc = New(WithBucketNum(1))
+		var count = 1000
+		for i := 0; i < count; i++ {
+			key := strconv.Itoa(utils.Numeric.Intn(count))
+			exp := time.Duration(utils.Numeric.Intn(count)+10) * time.Second
+			mc.Set(key, 1, exp)
+		}
+
+		for i := 0; i < count; i++ {
+			key := strconv.Itoa(utils.Numeric.Intn(count))
+			exp := time.Duration(utils.Numeric.Intn(count)+10) * time.Second
+			mc.GetWithTTL(key, exp)
+		}
+
+		var list1 []int
+		var list2 []int
+		for _, b := range mc.storage {
+			b.Lock()
+			for _, item := range b.Heap.Data {
+				list1 = append(list1, int(item.ExpireAt))
+			}
+			b.Unlock()
+		}
+		sort.Ints(list1)
+
+		for _, b := range mc.storage {
+			b.Lock()
+			for b.Heap.Len() > 0 {
+				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+			}
+			b.Unlock()
+		}
+
+		assert.Equal(t, len(list1), len(list2))
+		for i, v := range list2 {
+			assert.Equal(t, list1[i], v)
+		}
+	})
 }
 
 func TestMemoryCache_Delete(t *testing.T) {
@@ -275,6 +353,44 @@ func TestMemoryCache_Delete(t *testing.T) {
 		})
 		go mc.Delete("ting")
 		wg.Wait()
+	})
+
+	t.Run("batch delete", func(t *testing.T) {
+		var mc = New(WithBucketNum(1))
+		var count = 1000
+		for i := 0; i < count; i++ {
+			key := strconv.Itoa(utils.Numeric.Intn(count))
+			exp := time.Duration(utils.Numeric.Intn(count)+10) * time.Second
+			mc.Set(key, 1, exp)
+		}
+		for i := 0; i < count/2; i++ {
+			key := strconv.Itoa(utils.Numeric.Intn(count))
+			mc.Delete(key)
+		}
+
+		var list1 []int
+		var list2 []int
+		for _, b := range mc.storage {
+			b.Lock()
+			for _, item := range b.Heap.Data {
+				list1 = append(list1, int(item.ExpireAt))
+			}
+			b.Unlock()
+		}
+		sort.Ints(list1)
+
+		for _, b := range mc.storage {
+			b.Lock()
+			for b.Heap.Len() > 0 {
+				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+			}
+			b.Unlock()
+		}
+
+		assert.Equal(t, len(list1), len(list2))
+		for i, v := range list2 {
+			assert.Equal(t, list1[i], v)
+		}
 	})
 }
 
