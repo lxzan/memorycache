@@ -12,6 +12,16 @@ type heap struct {
 
 func (c *heap) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
 
+func (c *heap) UpdateTTL(ele *Element, exp int64) {
+	var down = exp > ele.ExpireAt
+	ele.ExpireAt = exp
+	if down {
+		c.Down(ele.index, c.Len())
+	} else {
+		c.Up(ele.index)
+	}
+}
+
 func (c *heap) min(i, j int) int {
 	if c.Data[i].ExpireAt < c.Data[j].ExpireAt {
 		return i
@@ -64,7 +74,7 @@ func (c *heap) Delete(i int) {
 	case 1:
 		c.Data = c.Data[:0]
 	default:
-		var down = c.Data[n-1].ExpireAt > c.Data[i].ExpireAt
+		var down = c.Less(i, n-1)
 		c.Swap(i, n-1)
 		c.Data = c.Data[:n-1]
 		if i < n-1 {
