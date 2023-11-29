@@ -25,8 +25,8 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 		memorycache.WithBucketNum(128),
 		memorycache.WithBucketSize(1000, 10000),
 	)
-	var i = atomic.Int64{}
 	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
 		for pb.Next() {
 			index := i.Add(1) % benchcount
 			mc.Set(benchkeys[index], 1, time.Hour)
@@ -43,12 +43,35 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
 	}
 
-	var i = atomic.Int64{}
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
 		for pb.Next() {
 			index := i.Add(1) % benchcount
 			mc.Get(benchkeys[index])
+		}
+	})
+}
+
+func BenchmarkMemoryCache_SetAndGet(b *testing.B) {
+	var mc = memorycache.New(
+		memorycache.WithBucketNum(128),
+		memorycache.WithBucketSize(1000, 10000),
+	)
+	for i := 0; i < benchcount; i++ {
+		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
+		for pb.Next() {
+			index := i.Add(1) % benchcount
+			if index&7 == 0 {
+				mc.Set(benchkeys[index], 1, time.Hour)
+			} else {
+				mc.Get(benchkeys[index])
+			}
 		}
 	})
 }
@@ -59,8 +82,8 @@ func BenchmarkRistretto_Set(b *testing.B) {
 		MaxCost:     1 << 30, // maximum cost of cache (1GB).
 		BufferItems: 64,      // number of keys per Get buffer.
 	})
-	var i = atomic.Int64{}
 	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
 		for pb.Next() {
 			index := i.Add(1) % benchcount
 			mc.SetWithTTL(benchkeys[index], 1, 1, time.Hour)
@@ -78,12 +101,36 @@ func BenchmarkRistretto_Get(b *testing.B) {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
 	}
 
-	var i = atomic.Int64{}
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
 		for pb.Next() {
 			index := i.Add(1) % benchcount
 			mc.Get(benchkeys[index])
+		}
+	})
+}
+
+func BenchmarkRistretto_SetAndGet(b *testing.B) {
+	var mc, _ = ristretto.NewCache(&ristretto.Config{
+		NumCounters: 1e7,     // number of keys to track frequency of (10M).
+		MaxCost:     1 << 30, // maximum cost of cache (1GB).
+		BufferItems: 64,      // number of keys per Get buffer.
+	})
+	for i := 0; i < benchcount; i++ {
+		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var i = atomic.Int64{}
+		for pb.Next() {
+			index := i.Add(1) % benchcount
+			if index&7 == 0 {
+				mc.SetWithTTL(benchkeys[index], 1, 1, time.Hour)
+			} else {
+				mc.Get(benchkeys[index])
+			}
 		}
 	})
 }
