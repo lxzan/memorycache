@@ -86,13 +86,17 @@ func main() {
 -   1,000,000 elements
 
 ```
+go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-cpu: AMD EPYC 7763 64-Core Processor
-BenchmarkMemoryCache_Set-4      11106261    100.6 ns/op	      18 B/op	       0 allocs/op
-BenchmarkMemoryCache_Get-4      635988      77.30 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRistretto_Set-4        7933663     491.8 ns/op	     170 B/op	       2 allocs/op
-BenchmarkRistretto_Get-4        11085688    98.92 ns/op	      18 B/op	       1 allocs/op
+cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
+BenchmarkMemoryCache_Set-12             22848898                62.83 ns/op            8 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-12             47904933                30.94 ns/op            0 B/op          0 allocs/op
+BenchmarkMemoryCache_SetAndGet-12       48951848                34.41 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-12               12992732               139.3 ns/op           118 B/op          2 allocs/op
+BenchmarkRistretto_Get-12               27832851                45.11 ns/op           16 B/op          1 allocs/op
+BenchmarkRistretto_SetAndGet-12         12232522               102.9 ns/op            32 B/op          1 allocs/op
 PASS
+ok      github.com/lxzan/memorycache/benchmark  31.772s
 ```
