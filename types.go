@@ -6,33 +6,34 @@ import "time"
 type Reason uint8
 
 const (
-	ReasonExpired  = Reason(0)
-	ReasonOverflow = Reason(1)
-	ReasonDeleted  = Reason(2)
+	ReasonExpired = Reason(0)
+	ReasonEvicted = Reason(1)
+	ReasonDeleted = Reason(2)
 )
 
-type CallbackFunc func(ele *Element, reason Reason)
+type CallbackFunc[T any] func(element T, reason Reason)
 
-var emptyCallback CallbackFunc = func(ele *Element, reason Reason) {}
+type Element[K comparable, V any] struct {
+	// 前后指针
+	prev, next *Element[K, V]
 
-type Element struct {
 	// 索引
 	index int
 
 	// 回调函数
-	cb CallbackFunc
+	cb CallbackFunc[*Element[K, V]]
 
 	// 键
-	Key string
+	Key K
 
 	// 值
-	Value any
+	Value V
 
 	// 过期时间, 毫秒
 	ExpireAt int64
 }
 
-func (c *Element) expired(now int64) bool {
+func (c *Element[K, V]) expired(now int64) bool {
 	return now > c.ExpireAt
 }
 
@@ -42,4 +43,5 @@ type config struct {
 	MaxKeysDeleted           int           // 每次检查至多删除key的数量(单个存储桶)
 	InitialSize              int           // 初始化大小(单个存储桶)
 	MaxCapacity              int           // 最大容量(单个存储桶)
+	TimeCacheEnabled         bool          // 是否开启时间缓存
 }

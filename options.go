@@ -51,6 +51,14 @@ func WithInterval(min, max time.Duration) Option {
 	}
 }
 
+// WithTimeCache 是否开启时间缓存
+// Whether to turn on time caching
+func WithTimeCache(enabled bool) Option {
+	return func(c *config) {
+		c.TimeCacheEnabled = enabled
+	}
+}
+
 func withInitialize() Option {
 	return func(c *config) {
 		if c.BucketNum <= 0 {
