@@ -338,9 +338,8 @@ func newPool[K comparable, V any]() *pool[K, V] {
 }
 
 type pool[K comparable, V any] struct {
-	p     sync.Pool
-	key   K
-	value V
+	p       sync.Pool
+	element Element[K, V]
 }
 
 func (c *pool[K, V]) GetElement() *Element[K, V] {
@@ -348,8 +347,6 @@ func (c *pool[K, V]) GetElement() *Element[K, V] {
 }
 
 func (c *pool[K, V]) PutElement(ele *Element[K, V]) {
-	ele.prev, ele.next, ele.cb = nil, nil, nil
-	ele.Key, ele.Value = c.key, c.value
-	ele.index, ele.ExpireAt = 0, 0
+	*ele = c.element
 	c.p.Put(ele)
 }

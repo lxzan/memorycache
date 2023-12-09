@@ -27,7 +27,7 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`, w
 
 -   Storage Data Limit: Limited by maximum capacity
 -   Expiration Time: Supported
--   Cache Elimination Policy: LRU
+-   Cache Eviction Policy: LRU
 -   GC Optimization: None
 -   Persistent: None
 -   Locking Mechanism: Slicing + Mutual Exclusion Locking
