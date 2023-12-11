@@ -2,56 +2,59 @@ package memorycache
 
 import (
 	"context"
-	"hash/maphash"
 	"math"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/maphash"
+	"github.com/lxzan/memorycache/internal/containers"
 	"github.com/lxzan/memorycache/internal/utils"
 )
 
-type MemoryCache struct {
-	config    *config
-	storage   []*bucket
-	seed      maphash.Seed
+type MemoryCache[K comparable, V any] struct {
+	conf      *config
+	storage   []*bucket[K, V]
+	hasher    maphash.Hasher[K]
 	timestamp atomic.Int64
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 	once      sync.Once
+	callback  CallbackFunc[*Element[K, V]]
 }
 
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
-func New(options ...Option) *MemoryCache {
-	var c = &config{}
+func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
+	var conf = &config{TimeCacheEnabled: true}
 	options = append(options, withInitialize())
 	for _, fn := range options {
-		fn(c)
+		fn(conf)
 	}
 
-	mc := &MemoryCache{
-		config:  c,
-		storage: make([]*bucket, c.BucketNum),
-		seed:    maphash.MakeSeed(),
+	mc := &MemoryCache[K, V]{
+		conf:    conf,
+		storage: make([]*bucket[K, V], conf.BucketNum),
+		hasher:  maphash.NewHasher[K](),
 		wg:      sync.WaitGroup{},
 		once:    sync.Once{},
 	}
-	mc.wg.Add(2)
+	mc.callback = func(entry *Element[K, V], reason Reason) {}
 	mc.ctx, mc.cancel = context.WithCancel(context.Background())
 	mc.timestamp.Store(time.Now().UnixMilli())
 
 	for i, _ := range mc.storage {
-		mc.storage[i] = &bucket{
-			Map:  make(map[string]*Element, c.InitialSize),
-			Heap: newHeap(c.InitialSize),
+		mc.storage[i] = &bucket[K, V]{
+			MaxCapacity: conf.MaxCapacity,
+			Map:         containers.NewMap[K, *Element[K, V]](conf.InitialSize, conf.SwissTable),
+			Heap:        newHeap[K, V](conf.InitialSize),
+			List:        new(queue[K, V]),
 		}
 	}
 
 	go func() {
-		var d0 = c.MaxInterval
+		var d0 = conf.MaxInterval
 		var ticker = time.NewTicker(d0)
 		defer ticker.Stop()
 
@@ -63,11 +66,11 @@ func New(options ...Option) *MemoryCache {
 			case now := <-ticker.C:
 				var sum = 0
 				for _, b := range mc.storage {
-					sum += b.ExpireCheck(now.UnixMilli(), c.MaxKeysDeleted)
+					sum += b.ExpireCheck(now.UnixMilli(), conf.MaxKeysDeleted)
 				}
 
 				// 删除数量超过阈值, 缩小时间间隔
-				if d1 := utils.SelectValue(sum > c.BucketNum*c.MaxKeysDeleted*7/10, c.MinInterval, c.MaxInterval); d1 != d0 {
+				if d1 := utils.SelectValue(sum > conf.BucketNum*conf.MaxKeysDeleted*7/10, conf.MinInterval, conf.MaxInterval); d1 != d0 {
 					d0 = d1
 					ticker.Reset(d0)
 				}
@@ -94,185 +97,174 @@ func New(options ...Option) *MemoryCache {
 	return mc
 }
 
-func (c *MemoryCache) Stop() {
+// Clear 清空缓存
+// clear caches
+func (c *MemoryCache[K, V]) Clear() {
+	for _, b := range c.storage {
+		b.Lock()
+		b.Heap = newHeap[K, V](c.conf.InitialSize)
+		b.Map = containers.NewMap[K, *Element[K, V]](c.conf.InitialSize, c.conf.SwissTable)
+		b.List = new(queue[K, V])
+		b.Unlock()
+	}
+}
+
+func (c *MemoryCache[K, V]) Stop() {
 	c.once.Do(func() {
+		c.wg.Add(2)
 		c.cancel()
 		c.wg.Wait()
 	})
 }
 
-func (c *MemoryCache) getBucket(key string) *bucket {
-	var idx = maphash.String(c.seed, key) & uint64(c.config.BucketNum-1)
+func (c *MemoryCache[K, V]) getBucket(key K) *bucket[K, V] {
+	var idx = c.hasher.Hash(key) & uint64(c.conf.BucketNum-1)
 	return c.storage[idx]
 }
 
-// 获取过期时间, d<=0表示永不过期
-func (c *MemoryCache) getExp(d time.Duration) int64 {
-	if d <= 0 {
-		return math.MaxInt
+func (c *MemoryCache[K, V]) getTimestamp() int64 {
+	if c.conf.TimeCacheEnabled {
+		return c.timestamp.Load()
 	}
-	return c.timestamp.Load() + d.Milliseconds()
+	return time.Now().UnixMilli()
+}
+
+// 获取过期时间, d<=0表示永不过期
+func (c *MemoryCache[K, V]) getExp(d time.Duration) int64 {
+	if d <= 0 {
+		return math.MaxInt64
+	}
+	return c.getTimestamp() + d.Milliseconds()
 }
 
 // 查找数据. 如果存在且超时, 删除并返回false
-func (c *MemoryCache) fetch(b *bucket, key string) (*Element, bool) {
-	v, exist := b.Map[key]
+func (c *MemoryCache[K, V]) fetch(b *bucket[K, V], key K) (*Element[K, V], bool) {
+	ele, exist := b.Map.Get(key)
 	if !exist {
 		return nil, false
 	}
 
-	if v.expired(c.timestamp.Load()) {
-		b.Heap.Delete(v.index)
-		delete(b.Map, key)
-		v.cb(v, ReasonExpired)
+	if ele.expired(c.getTimestamp()) {
+		b.Delete(ele, ReasonExpired)
 		return nil, false
 	}
 
-	return v, true
-}
-
-// 检查容量溢出
-func (c *MemoryCache) overflow(b *bucket) {
-	if b.Heap.Len() > c.config.MaxCapacity {
-		head := b.Heap.Pop()
-		delete(b.Map, head.Key)
-		head.cb(head, ReasonOverflow)
-	}
-}
-
-// Clear 清空所有缓存
-// clear all caches
-func (c *MemoryCache) Clear() {
-	for _, b := range c.storage {
-		b.Lock()
-		b.Heap = newHeap(c.config.InitialSize)
-		b.Map = make(map[string]*Element, c.config.InitialSize)
-		b.Unlock()
-	}
+	return ele, true
 }
 
 // Set 设置键值和过期时间. exp<=0表示永不过期.
 // Set the key value and expiration time. exp<=0 means never expire.
-func (c *MemoryCache) Set(key string, value any, exp time.Duration) (replaced bool) {
-	return c.SetWithCallback(key, value, exp, emptyCallback)
+func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (replaced bool) {
+	return c.SetWithCallback(key, value, exp, c.callback)
 }
 
 // SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会触发回调.
 // Set the key value, expiration time and callback function. The callback is triggered by both capacity overflow and expiration.
-func (c *MemoryCache) SetWithCallback(key string, value any, exp time.Duration, cb CallbackFunc) (replaced bool) {
+func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (replaced bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
 	var expireAt = c.getExp(exp)
-	v, ok := c.fetch(b, key)
+	ele, ok := c.fetch(b, key)
 	if ok {
-		v.Value = value
-		v.cb = cb
-		b.Heap.UpdateTTL(v, expireAt)
+		b.UpdateAll(ele, value, expireAt, cb)
 		return true
 	}
 
-	var ele = &Element{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
-	b.Heap.Push(ele)
-	b.Map[key] = ele
-	c.overflow(b)
+	b.Insert(key, value, expireAt, cb)
 	return false
 }
 
 // Get
-func (c *MemoryCache) Get(key string) (v any, exist bool) {
+func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
-	result, ok := c.fetch(c.getBucket(key), key)
+	ele, ok := c.fetch(c.getBucket(key), key)
 	if !ok {
-		return nil, false
+		return v, false
 	}
-	return result.Value, true
+	b.List.MoveToBack(ele)
+	return ele.Value, true
 }
 
 // GetWithTTL 获取. 如果存在, 刷新过期时间.
 // Get a value. If it exists, refreshes the expiration time.
-func (c *MemoryCache) GetWithTTL(key string, exp time.Duration) (v any, exist bool) {
+func (c *MemoryCache[K, V]) GetWithTTL(key K, exp time.Duration) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
-	result, ok := c.fetch(b, key)
+	ele, ok := c.fetch(b, key)
 	if !ok {
-		return nil, false
+		return v, false
 	}
 
-	b.Heap.UpdateTTL(result, c.getExp(exp))
-	return result.Value, true
+	b.UpdateTTL(ele, c.getExp(exp))
+	return ele.Value, true
 }
 
 // GetOrCreate 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
 // Get or create a value. If it exists, refreshes the expiration time. If it does not exist, creates a new one.
-func (c *MemoryCache) GetOrCreate(key string, value any, exp time.Duration) (v any, exist bool) {
-	return c.GetOrCreateWithCallback(key, value, exp, emptyCallback)
+func (c *MemoryCache[K, V]) GetOrCreate(key K, value V, exp time.Duration) (v V, exist bool) {
+	return c.GetOrCreateWithCallback(key, value, exp, c.callback)
 }
 
 // GetOrCreateWithCallback 如果存在, 刷新过期时间. 如果不存在, 创建一个新的.
 // Get or create a value with CallbackFunc. If it exists, refreshes the expiration time. If it does not exist, creates a new one.
-func (c *MemoryCache) GetOrCreateWithCallback(key string, value any, exp time.Duration, cb CallbackFunc) (v any, exist bool) {
+func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
 	expireAt := c.getExp(exp)
-	result, ok := c.fetch(b, key)
+	ele, ok := c.fetch(b, key)
 	if ok {
-		result.ExpireAt = expireAt
-		b.Heap.Down(result.index, b.Heap.Len())
-		return result.Value, true
+		b.UpdateTTL(ele, expireAt)
+		return ele.Value, true
 	}
 
-	var ele = &Element{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
-	b.Heap.Push(ele)
-	b.Map[key] = ele
-	c.overflow(b)
+	b.Insert(key, value, expireAt, cb)
 	return value, false
 }
 
 // Delete
-func (c *MemoryCache) Delete(key string) (deleted bool) {
+func (c *MemoryCache[K, V]) Delete(key K) (deleted bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
-	v, ok := c.fetch(b, key)
+	ele, ok := c.fetch(b, key)
 	if !ok {
 		return false
 	}
 
-	b.Heap.Delete(v.index)
-	delete(b.Map, key)
-	v.cb(v, ReasonDeleted)
+	b.Delete(ele, ReasonDeleted)
 	return true
 }
 
-// Keys 获取前缀匹配的key
-// Get prefix matching key
-func (c *MemoryCache) Keys(prefix string) []string {
-	var arr = make([]string, 0)
+// Range
+func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		for _, v := range b.Heap.Data {
-			if !v.expired(now) && strings.HasPrefix(v.Key, prefix) {
-				arr = append(arr, v.Key)
+		for _, ele := range b.Heap.Data {
+			if ele.expired(now) {
+				continue
+			}
+			if !f(ele.Key, ele.Value) {
+				b.Unlock()
+				return
 			}
 		}
 		b.Unlock()
 	}
-	return arr
 }
 
 // Len 获取当前元素数量
 // Get the number of Elements
-func (c *MemoryCache) Len() int {
+func (c *MemoryCache[K, V]) Len() int {
 	var num = 0
 	for _, b := range c.storage {
 		b.Lock()
@@ -282,23 +274,52 @@ func (c *MemoryCache) Len() int {
 	return num
 }
 
-type bucket struct {
+type bucket[K comparable, V any] struct {
 	sync.Mutex
-	Map  map[string]*Element
-	Heap *heap
+	MaxCapacity int
+	Map         containers.Map[K, *Element[K, V]]
+	Heap        *heap[K, V]
+	List        *queue[K, V]
 }
 
-// 过期时间检查
-func (c *bucket) ExpireCheck(now int64, num int) int {
+// ExpireCheck 过期时间检查
+func (c *bucket[K, V]) ExpireCheck(now int64, num int) int {
 	c.Lock()
 	defer c.Unlock()
 
 	var sum = 0
 	for c.Heap.Len() > 0 && c.Heap.Front().expired(now) && sum < num {
-		head := c.Heap.Pop()
-		delete(c.Map, head.Key)
+		c.Delete(c.Heap.Front(), ReasonExpired)
 		sum++
-		head.cb(head, ReasonExpired)
 	}
 	return sum
+}
+
+func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
+	c.List.Delete(ele)
+	c.Heap.Delete(ele.index)
+	c.Map.Delete(ele.Key)
+	ele.cb(ele, reason)
+}
+
+func (c *bucket[K, V]) UpdateAll(ele *Element[K, V], value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
+	ele.Value = value
+	ele.cb = cb
+	c.UpdateTTL(ele, expireAt)
+}
+
+func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
+	c.Heap.UpdateTTL(ele, expireAt)
+	c.List.MoveToBack(ele)
+}
+
+func (c *bucket[K, V]) Insert(key K, value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
+	if c.List.Len() >= c.MaxCapacity {
+		c.Delete(c.List.Front(), ReasonEvicted)
+	}
+
+	var ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
+	c.List.PushBack(ele)
+	c.Heap.Push(ele)
+	c.Map.Put(key, ele)
 }

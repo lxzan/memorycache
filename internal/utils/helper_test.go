@@ -73,3 +73,20 @@ func TestSelectValue(t *testing.T) {
 	assert.Equal(t, SelectValue(true, 1, 2), 1)
 	assert.Equal(t, SelectValue(false, 1, 2), 2)
 }
+
+func TestIsSameSlice(t *testing.T) {
+	assert.True(t, IsSameSlice(
+		[]int{1, 2, 3},
+		[]int{1, 2, 3},
+	))
+
+	assert.False(t, IsSameSlice(
+		[]int{1, 2, 3},
+		[]int{1, 2},
+	))
+
+	assert.False(t, IsSameSlice(
+		[]int{1, 2, 3},
+		[]int{1, 2, 4},
+	))
+}

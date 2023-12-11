@@ -1,7 +1,7 @@
 .idea/
 .vscode/
 vendor/
-examples/
+cmd/
 bin/
 go.work*
 .DS_Store

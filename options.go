@@ -51,6 +51,22 @@ func WithInterval(min, max time.Duration) Option {
 	}
 }
 
+// WithTimeCache 是否开启时间缓存
+// Whether to turn on time caching
+func WithTimeCache(enabled bool) Option {
+	return func(c *config) {
+		c.TimeCacheEnabled = enabled
+	}
+}
+
+// WithSwissTable 使用swiss table替代runtime map
+// Using swiss table instead of runtime map
+func WithSwissTable() Option {
+	return func(c *config) {
+		c.SwissTable = true
+	}
+}
+
 func withInitialize() Option {
 	return func(c *config) {
 		if c.BucketNum <= 0 {

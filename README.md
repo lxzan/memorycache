@@ -27,7 +27,7 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`, w
 
 -   Storage Data Limit: Limited by maximum capacity
 -   Expiration Time: Supported
--   Cache Elimination Policy: LRU-Like
+-   Cache Eviction Policy: LRU
 -   GC Optimization: None
 -   Persistent: None
 -   Locking Mechanism: Slicing + Mutual Exclusion Locking
@@ -62,23 +62,25 @@ import (
 )
 
 func main() {
-	mc := memorycache.New(
-		memorycache.WithBucketNum(128),  // Bucket number, recommended to be a prime number.
-		memorycache.WithBucketSize(1000, 10000), // Bucket size, initial size and maximum capacity.
+	mc := memorycache.New[string, any](
+		memorycache.WithBucketNum(128),                          // Bucket number, recommended to be a prime number.
+		memorycache.WithBucketSize(1000, 10000),                 // Bucket size, initial size and maximum capacity.
 		memorycache.WithInterval(5*time.Second, 30*time.Second), // Active cycle cleanup interval and expiration time.
 	)
-	defer mc.Stop()
 
-	mc.Set("xxx", 1, 10*time.Second)
+	mc.SetWithCallback("xxx", 1, time.Second, func(element *memorycache.Element[string, any], reason memorycache.Reason) {
+		fmt.Printf("callback: key=%s, reason=%v\n", element.Key, reason)
+	})
 
 	val, exist := mc.Get("xxx")
 	fmt.Printf("val=%v, exist=%v\n", val, exist)
 
-	time.Sleep(32 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	val, exist = mc.Get("xxx")
 	fmt.Printf("val=%v, exist=%v\n", val, exist)
 }
+
 ```
 
 ### Benchmark
@@ -91,12 +93,15 @@ goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
 cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
-BenchmarkMemoryCache_Set-12             22848898                62.83 ns/op            8 B/op          0 allocs/op
-BenchmarkMemoryCache_Get-12             47904933                30.94 ns/op            0 B/op          0 allocs/op
-BenchmarkMemoryCache_SetAndGet-12       48951848                34.41 ns/op            0 B/op          0 allocs/op
-BenchmarkRistretto_Set-12               12992732               139.3 ns/op           118 B/op          2 allocs/op
-BenchmarkRistretto_Get-12               27832851                45.11 ns/op           16 B/op          1 allocs/op
-BenchmarkRistretto_SetAndGet-12         12232522               102.9 ns/op            32 B/op          1 allocs/op
+BenchmarkMemoryCache_Set-12             18891738               109.5 ns/op            11 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-12             21813127                48.21 ns/op            0 B/op          0 allocs/op
+BenchmarkMemoryCache_SetAndGet-12       22530026                52.14 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-12               13786928               140.6 ns/op           116 B/op          2 allocs/op
+BenchmarkRistretto_Get-12               26299240                45.87 ns/op           16 B/op          1 allocs/op
+BenchmarkRistretto_SetAndGet-12         11360748               103.0 ns/op            27 B/op          1 allocs/op
+BenchmarkTheine_Set-12                   3527848               358.2 ns/op            19 B/op          0 allocs/op
+BenchmarkTheine_Get-12                  23234760                49.37 ns/op            0 B/op          0 allocs/op
+BenchmarkTheine_SetAndGet-12             6755134               176.3 ns/op             0 B/op          0 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  31.772s
+ok      github.com/lxzan/memorycache/benchmark  65.498s
 ```
