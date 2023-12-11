@@ -2,7 +2,7 @@ package memorycache
 
 import "time"
 
-// 回调函数触发原因
+// Reason 回调函数触发原因
 type Reason uint8
 
 const (
@@ -44,4 +44,5 @@ type config struct {
 	InitialSize              int           // 初始化大小(单个存储桶)
 	MaxCapacity              int           // 最大容量(单个存储桶)
 	TimeCacheEnabled         bool          // 是否开启时间缓存
+	SwissTable               bool          // 是否使用swiss table
 }

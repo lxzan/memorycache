@@ -59,6 +59,14 @@ func WithTimeCache(enabled bool) Option {
 	}
 }
 
+// WithSwissTable 使用swiss table替代runtime map
+// Using swiss table instead of runtime map
+func WithSwissTable() Option {
+	return func(c *config) {
+		c.SwissTable = true
+	}
+}
+
 func withInitialize() Option {
 	return func(c *config) {
 		if c.BucketNum <= 0 {

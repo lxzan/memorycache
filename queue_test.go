@@ -1,9 +1,10 @@
 package memorycache
 
 import (
+	"testing"
+
 	"github.com/lxzan/memorycache/internal/utils"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestQueue_Delete(t *testing.T) {

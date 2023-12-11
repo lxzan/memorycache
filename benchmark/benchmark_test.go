@@ -1,10 +1,10 @@
 package benchmark
 
 import (
-	"github.com/Yiling-J/theine-go"
 	"testing"
 	"time"
 
+	"github.com/Yiling-J/theine-go"
 	"github.com/dgraph-io/ristretto"
 	"github.com/lxzan/memorycache"
 	"github.com/lxzan/memorycache/internal/utils"
@@ -15,10 +15,18 @@ const (
 	benchcount = 1 << 20
 )
 
-var benchkeys = make([]string, 0, 2*benchcount)
+var (
+	benchkeys = make([]string, 0, benchcount)
+
+	options = []memorycache.Option{
+		memorycache.WithBucketNum(sharding),
+		memorycache.WithBucketSize(benchcount/sharding/10, benchcount/sharding),
+		memorycache.WithSwissTable(),
+	}
+)
 
 func init() {
-	for i := 0; i < 2*benchcount; i++ {
+	for i := 0; i < benchcount; i++ {
 		benchkeys = append(benchkeys, string(utils.AlphabetNumeric.Generate(16)))
 	}
 }
@@ -28,10 +36,7 @@ func getIndex(i int) int {
 }
 
 func BenchmarkMemoryCache_Set(b *testing.B) {
-	var mc = memorycache.New[string, int](
-		memorycache.WithBucketNum(sharding),
-		memorycache.WithBucketSize(1000, benchcount/sharding),
-	)
+	var mc = memorycache.New[string, int](options...)
 	b.RunParallel(func(pb *testing.PB) {
 		var i = 0
 		for pb.Next() {
@@ -43,10 +48,7 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 }
 
 func BenchmarkMemoryCache_Get(b *testing.B) {
-	var mc = memorycache.New[string, int](
-		memorycache.WithBucketNum(sharding),
-		memorycache.WithBucketSize(1000, benchcount/sharding),
-	)
+	var mc = memorycache.New[string, int](options...)
 	for i := 0; i < benchcount; i++ {
 		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
 	}
@@ -63,10 +65,7 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 }
 
 func BenchmarkMemoryCache_SetAndGet(b *testing.B) {
-	var mc = memorycache.New[string, int](
-		memorycache.WithBucketNum(sharding),
-		memorycache.WithBucketSize(1000, benchcount/sharding),
-	)
+	var mc = memorycache.New[string, int](options...)
 	for i := 0; i < benchcount; i++ {
 		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
 	}

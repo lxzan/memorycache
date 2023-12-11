@@ -1,11 +1,12 @@
 package memorycache
 
 import (
-	"github.com/lxzan/memorycache/internal/utils"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
 	"testing"
+
+	"github.com/lxzan/memorycache/internal/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 func isSorted[K comparable, V any](h *heap[K, V]) bool {
