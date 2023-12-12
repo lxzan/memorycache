@@ -18,15 +18,16 @@ func (c *queue[K, V]) PushBack(ele *Element[K, V]) {
 		return
 	}
 
-	if c.length > 0 {
+	c.length++
+	if c.tail != nil {
 		c.tail.next = ele
 		ele.prev = c.tail
 		c.tail = ele
-	} else {
-		c.head = ele
-		c.tail = ele
+		return
 	}
-	c.length++
+
+	c.head = ele
+	c.tail = ele
 }
 
 func (c *queue[K, V]) Pop() *Element[K, V] {

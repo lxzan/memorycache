@@ -67,8 +67,8 @@ func WithSwissTable(enabled bool) Option {
 	}
 }
 
-// WithLRU 是否开启LRU缓存驱逐算法. 默认为false
-// Whether to enable LRU cache eviction. Default is false
+// WithLRU 是否开启LRU缓存驱逐算法. 默认为true
+// Whether to enable LRU cache eviction. Default is true
 func WithLRU(enabled bool) Option {
 	return func(c *config) {
 		c.LRU = enabled
@@ -129,7 +129,7 @@ type config struct {
 	// Whether to use swiss table, false by default.
 	SwissTable bool
 
-	// 是否开启LRU缓存驱逐算法. 默认为false
-	// Whether to enable LRU cache eviction. Default is false
+	// 是否开启LRU缓存驱逐算法. 默认为true
+	// Whether to enable LRU cache eviction. Default is true
 	LRU bool
 }

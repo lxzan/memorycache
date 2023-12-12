@@ -27,7 +27,7 @@ type MemoryCache[K comparable, V any] struct {
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
 func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
-	var conf = &config{CachedTime: true}
+	var conf = &config{CachedTime: true, LRU: true}
 	options = append(options, withInitialize())
 	for _, fn := range options {
 		fn(conf)
@@ -66,7 +66,7 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 			case now := <-ticker.C:
 				var sum = 0
 				for _, b := range mc.storage {
-					sum += b.ExpireCheck(now.UnixMilli(), conf.DeleteLimits)
+					sum += b.Check(now.UnixMilli(), conf.DeleteLimits)
 				}
 
 				// 删除数量超过阈值, 缩小时间间隔
@@ -168,7 +168,8 @@ func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, c
 	var expireAt = c.getExp(exp)
 	ele, ok := c.fetch(b, key)
 	if ok {
-		b.UpdateAll(ele, value, expireAt, cb)
+		ele.Value, ele.cb = value, cb
+		b.UpdateTTL(ele, expireAt)
 		return true
 	}
 
@@ -176,7 +177,8 @@ func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, c
 	return false
 }
 
-// Get
+// Get 查询缓存
+// query cache
 func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -229,7 +231,8 @@ func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Dur
 	return value, false
 }
 
-// Delete
+// Delete 删除缓存
+// delete cache
 func (c *MemoryCache[K, V]) Delete(key K) (deleted bool) {
 	var b = c.getBucket(key)
 	b.Lock()
@@ -244,7 +247,8 @@ func (c *MemoryCache[K, V]) Delete(key K) (deleted bool) {
 	return true
 }
 
-// Range
+// Range 遍历缓存. 注意: 不要在回调函数里面操作 MemoryCache[K, V] 实例, 可能会造成死锁.
+// Traverse the cache. Note: Do not manipulate MemoryCache[K, V] instances inside callback functions, as this may cause deadlocks.
 func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
@@ -262,8 +266,8 @@ func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	}
 }
 
-// Len 获取当前元素数量
-// Get the number of Elements
+// Len 快速获取当前缓存元素数量, 不做过期检查.
+// Quickly gets the current number of cached elements, without checking for expiration.
 func (c *MemoryCache[K, V]) Len() int {
 	var num = 0
 	for _, b := range c.storage {
@@ -282,8 +286,8 @@ type bucket[K comparable, V any] struct {
 	List *queue[K, V]
 }
 
-// ExpireCheck 过期时间检查
-func (c *bucket[K, V]) ExpireCheck(now int64, num int) int {
+// Check 过期时间检查
+func (c *bucket[K, V]) Check(now int64, num int) int {
 	c.Lock()
 	defer c.Unlock()
 
@@ -300,12 +304,6 @@ func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
 	c.Heap.Delete(ele.index)
 	c.Map.Delete(ele.Key)
 	ele.cb(ele, reason)
-}
-
-func (c *bucket[K, V]) UpdateAll(ele *Element[K, V], value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
-	ele.Value = value
-	ele.cb = cb
-	c.UpdateTTL(ele, expireAt)
 }
 
 func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
