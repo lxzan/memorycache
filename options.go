@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	defaultBucketNum      = 16
-	defaultMinInterval    = 5 * time.Second
-	defaultMaxInterval    = 30 * time.Second
-	defaultMaxKeysDeleted = 1000
-	defaultInitialSize    = 1000
-	defaultMaxCapacity    = 100000
+	defaultBucketNum    = 16
+	defaultMinInterval  = 5 * time.Second
+	defaultMaxInterval  = 30 * time.Second
+	defaultDeleteLimits = 1000
+	defaultBucketSize   = 1000
+	defaultBucketCap    = 100000
 )
 
 type Option func(c *config)
@@ -25,11 +25,11 @@ func WithBucketNum(num int) Option {
 	}
 }
 
-// WithMaxKeysDeleted 设置每次TTL检查最大删除key数量. (单个存储桶)
+// WithDeleteLimits 设置每次TTL检查最大删除key数量. (单个存储桶)
 // Set the maximum number of keys to be deleted per TTL check (single bucket)
-func WithMaxKeysDeleted(num int) Option {
+func WithDeleteLimits(num int) Option {
 	return func(c *config) {
-		c.MaxKeysDeleted = num
+		c.DeleteLimits = num
 	}
 }
 
@@ -37,8 +37,8 @@ func WithMaxKeysDeleted(num int) Option {
 // Set the initial size and maximum capacity. Exceeding the maximum capacity will be erased. (Single bucket)
 func WithBucketSize(size, cap int) Option {
 	return func(c *config) {
-		c.InitialSize = size
-		c.MaxCapacity = cap
+		c.BucketSize = size
+		c.BucketCap = cap
 	}
 }
 
@@ -51,19 +51,27 @@ func WithInterval(min, max time.Duration) Option {
 	}
 }
 
-// WithTimeCache 是否开启时间缓存
+// WithCachedTime 是否开启时间缓存
 // Whether to turn on time caching
-func WithTimeCache(enabled bool) Option {
+func WithCachedTime(enabled bool) Option {
 	return func(c *config) {
-		c.TimeCacheEnabled = enabled
+		c.CachedTime = enabled
 	}
 }
 
 // WithSwissTable 使用swiss table替代runtime map
 // Using swiss table instead of runtime map
-func WithSwissTable() Option {
+func WithSwissTable(enabled bool) Option {
 	return func(c *config) {
-		c.SwissTable = true
+		c.SwissTable = enabled
+	}
+}
+
+// WithLRU 是否开启LRU缓存驱逐算法. 默认为false
+// Whether to enable LRU cache eviction. Default is false
+func WithLRU(enabled bool) Option {
+	return func(c *config) {
+		c.LRU = enabled
 	}
 }
 
@@ -82,16 +90,46 @@ func withInitialize() Option {
 			c.MaxInterval = defaultMaxInterval
 		}
 
-		if c.MaxKeysDeleted <= 0 {
-			c.MaxKeysDeleted = defaultMaxKeysDeleted
+		if c.DeleteLimits <= 0 {
+			c.DeleteLimits = defaultDeleteLimits
 		}
 
-		if c.InitialSize <= 0 {
-			c.InitialSize = defaultInitialSize
+		if c.BucketSize <= 0 {
+			c.BucketSize = defaultBucketSize
 		}
 
-		if c.MaxCapacity <= 0 {
-			c.MaxCapacity = defaultMaxCapacity
+		if c.BucketCap <= 0 {
+			c.BucketCap = defaultBucketCap
 		}
 	}
+}
+
+type config struct {
+	// 检查周期, 默认30s, 最小检查周期为5s
+	// Check period, default 30s, minimum 5s.
+	MinInterval, MaxInterval time.Duration
+
+	// 存储桶的初始化大小和最大容量, 默认为1000和100000
+	// Initialized bucket size and maximum capacity, defaults to 1000 and 100000.
+	BucketSize, BucketCap int
+
+	// 存储桶数量, 默认为16
+	// Number of buckets, default is 16
+	BucketNum int
+
+	// 每次检查至多删除key的数量(单个存储桶)
+	// The number of keys to be deleted per check (for a single bucket).
+	DeleteLimits int
+
+	// 是否开启时间缓存, 默认为true
+	// Whether to enable time caching, true by default.
+	CachedTime bool
+
+	// 是否使用swiss table, 默认为false
+	// Whether to use swiss table, false by default.
+	SwissTable bool
+
+	// 是否开启LRU缓存驱逐算法. 默认为false
+	// Whether to enable LRU cache eviction. Default is false
+	LRU bool
 }

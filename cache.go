@@ -27,7 +27,7 @@ type MemoryCache[K comparable, V any] struct {
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
 func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
-	var conf = &config{TimeCacheEnabled: true}
+	var conf = &config{CachedTime: true}
 	options = append(options, withInitialize())
 	for _, fn := range options {
 		fn(conf)
@@ -46,10 +46,10 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 
 	for i, _ := range mc.storage {
 		mc.storage[i] = &bucket[K, V]{
-			MaxCapacity: conf.MaxCapacity,
-			Map:         containers.NewMap[K, *Element[K, V]](conf.InitialSize, conf.SwissTable),
-			Heap:        newHeap[K, V](conf.InitialSize),
-			List:        new(queue[K, V]),
+			conf: conf,
+			Map:  containers.NewMap[K, *Element[K, V]](conf.BucketSize, conf.SwissTable),
+			Heap: newHeap[K, V](conf.BucketSize),
+			List: newQueue[K, V](conf.LRU),
 		}
 	}
 
@@ -66,11 +66,11 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 			case now := <-ticker.C:
 				var sum = 0
 				for _, b := range mc.storage {
-					sum += b.ExpireCheck(now.UnixMilli(), conf.MaxKeysDeleted)
+					sum += b.ExpireCheck(now.UnixMilli(), conf.DeleteLimits)
 				}
 
 				// 删除数量超过阈值, 缩小时间间隔
-				if d1 := utils.SelectValue(sum > conf.BucketNum*conf.MaxKeysDeleted*7/10, conf.MinInterval, conf.MaxInterval); d1 != d0 {
+				if d1 := utils.SelectValue(sum > conf.BucketNum*conf.DeleteLimits*7/10, conf.MinInterval, conf.MaxInterval); d1 != d0 {
 					d0 = d1
 					ticker.Reset(d0)
 				}
@@ -102,9 +102,9 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 func (c *MemoryCache[K, V]) Clear() {
 	for _, b := range c.storage {
 		b.Lock()
-		b.Heap = newHeap[K, V](c.conf.InitialSize)
-		b.Map = containers.NewMap[K, *Element[K, V]](c.conf.InitialSize, c.conf.SwissTable)
-		b.List = new(queue[K, V])
+		b.Heap = newHeap[K, V](c.conf.BucketSize)
+		b.Map = containers.NewMap[K, *Element[K, V]](c.conf.BucketSize, c.conf.SwissTable)
+		b.List = newQueue[K, V](c.conf.LRU)
 		b.Unlock()
 	}
 }
@@ -123,7 +123,7 @@ func (c *MemoryCache[K, V]) getBucket(key K) *bucket[K, V] {
 }
 
 func (c *MemoryCache[K, V]) getTimestamp() int64 {
-	if c.conf.TimeCacheEnabled {
+	if c.conf.CachedTime {
 		return c.timestamp.Load()
 	}
 	return time.Now().UnixMilli()
@@ -276,10 +276,10 @@ func (c *MemoryCache[K, V]) Len() int {
 
 type bucket[K comparable, V any] struct {
 	sync.Mutex
-	MaxCapacity int
-	Map         containers.Map[K, *Element[K, V]]
-	Heap        *heap[K, V]
-	List        *queue[K, V]
+	conf *config
+	Map  containers.Map[K, *Element[K, V]]
+	Heap *heap[K, V]
+	List *queue[K, V]
 }
 
 // ExpireCheck 过期时间检查
@@ -314,8 +314,9 @@ func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
 }
 
 func (c *bucket[K, V]) Insert(key K, value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
-	if c.List.Len() >= c.MaxCapacity {
-		c.Delete(c.List.Front(), ReasonEvicted)
+	if c.Heap.Len() >= c.conf.BucketCap {
+		head := utils.SelectValue(c.conf.LRU, c.List.Front(), c.Heap.Front())
+		c.Delete(head, ReasonEvicted)
 	}
 
 	var ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb}

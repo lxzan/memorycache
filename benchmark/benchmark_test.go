@@ -12,6 +12,7 @@ import (
 
 const (
 	sharding   = 128
+	capacity   = 10000
 	benchcount = 1 << 20
 )
 
@@ -20,8 +21,9 @@ var (
 
 	options = []memorycache.Option{
 		memorycache.WithBucketNum(sharding),
-		memorycache.WithBucketSize(benchcount/sharding/10, benchcount/sharding),
-		memorycache.WithSwissTable(),
+		memorycache.WithBucketSize(capacity/10, capacity),
+		memorycache.WithSwissTable(true),
+		memorycache.WithLRU(true),
 	}
 )
 
@@ -87,9 +89,9 @@ func BenchmarkMemoryCache_SetAndGet(b *testing.B) {
 
 func BenchmarkRistretto_Set(b *testing.B) {
 	var mc, _ = ristretto.NewCache(&ristretto.Config{
-		NumCounters: benchcount * 10, // number of keys to track frequency of (10M).
-		MaxCost:     1 << 30,         // maximum cost of cache (1GB).
-		BufferItems: 64,              // number of keys per Get buffer.
+		NumCounters: capacity * sharding * 10, // number of keys to track frequency of (10M).
+		MaxCost:     1 << 30,                  // maximum cost of cache (1GB).
+		BufferItems: 64,                       // number of keys per Get buffer.
 	})
 	b.RunParallel(func(pb *testing.PB) {
 		var i = 0
@@ -103,9 +105,9 @@ func BenchmarkRistretto_Set(b *testing.B) {
 
 func BenchmarkRistretto_Get(b *testing.B) {
 	var mc, _ = ristretto.NewCache(&ristretto.Config{
-		NumCounters: benchcount * 10, // number of keys to track frequency of (10M).
-		MaxCost:     1 << 30,         // maximum cost of cache (1GB).
-		BufferItems: 64,              // number of keys per Get buffer.
+		NumCounters: capacity * sharding * 10, // number of keys to track frequency of (10M).
+		MaxCost:     1 << 30,                  // maximum cost of cache (1GB).
+		BufferItems: 64,                       // number of keys per Get buffer.
 	})
 	for i := 0; i < benchcount; i++ {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
@@ -124,9 +126,9 @@ func BenchmarkRistretto_Get(b *testing.B) {
 
 func BenchmarkRistretto_SetAndGet(b *testing.B) {
 	var mc, _ = ristretto.NewCache(&ristretto.Config{
-		NumCounters: benchcount * 10, // number of keys to track frequency of (10M).
-		MaxCost:     1 << 30,         // maximum cost of cache (1GB).
-		BufferItems: 64,              // number of keys per Get buffer.
+		NumCounters: capacity * sharding * 10, // number of keys to track frequency of (10M).
+		MaxCost:     1 << 30,                  // maximum cost of cache (1GB).
+		BufferItems: 64,                       // number of keys per Get buffer.
 	})
 	for i := 0; i < benchcount; i++ {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
@@ -148,7 +150,7 @@ func BenchmarkRistretto_SetAndGet(b *testing.B) {
 }
 
 func BenchmarkTheine_Set(b *testing.B) {
-	mc, _ := theine.NewBuilder[string, int](benchcount).Build()
+	mc, _ := theine.NewBuilder[string, int](sharding * capacity).Build()
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -160,7 +162,7 @@ func BenchmarkTheine_Set(b *testing.B) {
 }
 
 func BenchmarkTheine_Get(b *testing.B) {
-	mc, _ := theine.NewBuilder[string, int](benchcount).Build()
+	mc, _ := theine.NewBuilder[string, int](sharding * capacity).Build()
 	for i := 0; i < benchcount; i++ {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
 	}
@@ -177,7 +179,7 @@ func BenchmarkTheine_Get(b *testing.B) {
 }
 
 func BenchmarkTheine_SetAndGet(b *testing.B) {
-	mc, _ := theine.NewBuilder[string, int](benchcount).Build()
+	mc, _ := theine.NewBuilder[string, int](sharding * capacity).Build()
 	for i := 0; i < benchcount; i++ {
 		mc.SetWithTTL(benchkeys[i%benchcount], 1, 1, time.Hour)
 	}
