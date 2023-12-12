@@ -1,7 +1,5 @@
 package memorycache
 
-import "time"
-
 // Reason 回调函数触发原因
 type Reason uint8
 
@@ -35,14 +33,4 @@ type Element[K comparable, V any] struct {
 
 func (c *Element[K, V]) expired(now int64) bool {
 	return now > c.ExpireAt
-}
-
-type config struct {
-	MinInterval, MaxInterval time.Duration // 检查周期
-	BucketNum                int           // 存储桶数量
-	MaxKeysDeleted           int           // 每次检查至多删除key的数量(单个存储桶)
-	InitialSize              int           // 初始化大小(单个存储桶)
-	MaxCapacity              int           // 最大容量(单个存储桶)
-	TimeCacheEnabled         bool          // 是否开启时间缓存
-	SwissTable               bool          // 是否使用swiss table
 }

@@ -28,7 +28,7 @@ func TestMemoryCache(t *testing.T) {
 		var db = New[string, any](
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
 			WithBucketNum(1),
-			WithTimeCache(false),
+			WithCachedTime(false),
 		)
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 300*time.Millisecond)
@@ -45,7 +45,7 @@ func TestMemoryCache(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		var db = New[string, any](
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
-			WithTimeCache(false),
+			WithCachedTime(false),
 		)
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 200*time.Millisecond)
@@ -62,7 +62,7 @@ func TestMemoryCache(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		var db = New[string, any](
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
-			WithTimeCache(false),
+			WithCachedTime(false),
 		)
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 200*time.Millisecond)
@@ -80,7 +80,7 @@ func TestMemoryCache(t *testing.T) {
 		var mc = New[string, any](
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
 			WithBucketNum(1),
-			WithTimeCache(false),
+			WithCachedTime(false),
 		)
 		var m1 = make(map[string]int)
 		var m2 = make(map[string]int64)
@@ -121,9 +121,9 @@ func TestMemoryCache(t *testing.T) {
 	t.Run("expire", func(t *testing.T) {
 		var mc = New[string, any](
 			WithBucketNum(1),
-			WithMaxKeysDeleted(3),
+			WithDeleteLimits(3),
 			WithInterval(50*time.Millisecond, 100*time.Millisecond),
-			WithTimeCache(false),
+			WithCachedTime(false),
 		)
 		mc.Set("a", 1, 150*time.Millisecond)
 		mc.Set("b", 1, 150*time.Millisecond)
@@ -161,6 +161,7 @@ func TestMemoryCache_Set(t *testing.T) {
 		var mc = New[string, any](
 			WithBucketNum(1),
 			WithBucketSize(0, 2),
+			WithLRU(true),
 		)
 		mc.Set("ming", 1, 3*time.Hour)
 		mc.Set("hong", 1, 1*time.Hour)
@@ -578,7 +579,10 @@ func TestMemoryCache_Range(t *testing.T) {
 
 func TestMemoryCache_LRU(t *testing.T) {
 	const count = 10000
-	var mc = New[string, int](WithBucketNum(1))
+	var mc = New[string, int](
+		WithBucketNum(1),
+		WithLRU(true),
+	)
 	var indexes []int
 	for i := 0; i < count; i++ {
 		indexes = append(indexes, i)
@@ -605,7 +609,9 @@ func TestMemoryCache_LRU(t *testing.T) {
 }
 
 func TestMemoryCache_Random(t *testing.T) {
-	var mc = New[string, int]()
+	var mc = New[string, int](
+		WithLRU(true),
+	)
 	const count = 10000
 	for i := 0; i < count; i++ {
 		var key = string(utils.AlphabetNumeric.Generate(3))

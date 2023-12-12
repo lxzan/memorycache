@@ -9,7 +9,7 @@ import (
 
 func TestQueue_Delete(t *testing.T) {
 	t.Run("", func(t *testing.T) {
-		var q = &queue[string, int]{}
+		var q = newQueue[string, int](true)
 		var e0 = &Element[string, int]{Key: "a"}
 		var e1 = &Element[string, int]{Key: "b"}
 		var e2 = &Element[string, int]{Key: "c"}
@@ -25,7 +25,7 @@ func TestQueue_Delete(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var q = &queue[string, int]{}
+		var q = newQueue[string, int](true)
 		var e0 = &Element[string, int]{Key: "a"}
 		var e1 = &Element[string, int]{Key: "b"}
 		var e2 = &Element[string, int]{Key: "c"}
@@ -41,7 +41,7 @@ func TestQueue_Delete(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var q = &queue[string, int]{}
+		var q = newQueue[string, int](true)
 		var e0 = &Element[string, int]{Key: "a"}
 		var e1 = &Element[string, int]{Key: "b"}
 		var e2 = &Element[string, int]{Key: "c"}
@@ -58,7 +58,7 @@ func TestQueue_Delete(t *testing.T) {
 }
 
 func TestQueue_Pop(t *testing.T) {
-	var q = &queue[string, int]{}
+	var q = newQueue[string, int](true)
 	assert.Nil(t, q.Pop())
 	var e0 = &Element[string, int]{Key: "a"}
 	var e1 = &Element[string, int]{Key: "b"}

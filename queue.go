@@ -1,33 +1,37 @@
 package memorycache
 
+func newQueue[K comparable, V any](lru bool) *queue[K, V] { return &queue[K, V]{enabled: lru} }
+
 type queue[K comparable, V any] struct {
-	length int
-	head   *Element[K, V]
-	tail   *Element[K, V]
+	length  int
+	enabled bool
+	head    *Element[K, V]
+	tail    *Element[K, V]
 }
 
-func (c *queue[K, V]) Len() int {
-	return c.length
-}
+func (c *queue[K, V]) Len() int { return c.length }
 
-func (c *queue[K, V]) Front() *Element[K, V] {
-	return c.head
-}
+func (c *queue[K, V]) Front() *Element[K, V] { return c.head }
 
 func (c *queue[K, V]) PushBack(ele *Element[K, V]) {
-	if c.length > 0 {
+	if !c.enabled {
+		return
+	}
+
+	c.length++
+	if c.tail != nil {
 		c.tail.next = ele
 		ele.prev = c.tail
 		c.tail = ele
-	} else {
-		c.head = ele
-		c.tail = ele
+		return
 	}
-	c.length++
+
+	c.head = ele
+	c.tail = ele
 }
 
 func (c *queue[K, V]) Pop() *Element[K, V] {
-	if c.length == 0 {
+	if c.length == 0 || !c.enabled {
 		return nil
 	}
 	head := c.Front()
@@ -37,6 +41,10 @@ func (c *queue[K, V]) Pop() *Element[K, V] {
 
 // Delete it's safe delete in loop
 func (c *queue[K, V]) Delete(ele *Element[K, V]) {
+	if !c.enabled {
+		return
+	}
+
 	var prev = ele.prev
 	var next = ele.next
 	var state = 0
@@ -67,6 +75,10 @@ func (c *queue[K, V]) Delete(ele *Element[K, V]) {
 }
 
 func (c *queue[K, V]) MoveToBack(ele *Element[K, V]) {
+	if !c.enabled {
+		return
+	}
+
 	c.Delete(ele)
 	c.PushBack(ele)
 }
