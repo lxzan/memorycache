@@ -20,8 +20,8 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`, w
 
 **Cache Elimination Policy:**
 
-1. Set method cleans up overflowed keys
-2. Active cycle cleans up expired keys
+- Set method cleans up overflowed keys
+- Active cycle cleans up expired keys
 
 ### Principle
 
@@ -35,7 +35,6 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`, w
 ### Advantage
 
 -   Simple and easy to use
--   No third-party dependencies
 -   High performance
 -   Low memory usage
 -   Use quadruple heap to maintain the expiration time, effectively reduce the height of the tree, and improve the insertion performance
@@ -88,20 +87,19 @@ func main() {
 -   1,000,000 elements
 
 ```
-go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
-BenchmarkMemoryCache_Set-12             18891738               109.5 ns/op            11 B/op          0 allocs/op
-BenchmarkMemoryCache_Get-12             21813127                48.21 ns/op            0 B/op          0 allocs/op
-BenchmarkMemoryCache_SetAndGet-12       22530026                52.14 ns/op            0 B/op          0 allocs/op
-BenchmarkRistretto_Set-12               13786928               140.6 ns/op           116 B/op          2 allocs/op
-BenchmarkRistretto_Get-12               26299240                45.87 ns/op           16 B/op          1 allocs/op
-BenchmarkRistretto_SetAndGet-12         11360748               103.0 ns/op            27 B/op          1 allocs/op
-BenchmarkTheine_Set-12                   3527848               358.2 ns/op            19 B/op          0 allocs/op
-BenchmarkTheine_Get-12                  23234760                49.37 ns/op            0 B/op          0 allocs/op
-BenchmarkTheine_SetAndGet-12             6755134               176.3 ns/op             0 B/op          0 allocs/op
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkMemoryCache_Set-4         	10949929	        99.34 ns/op	      27 B/op	       0 allocs/op
+BenchmarkMemoryCache_Get-4         	19481263	        61.18 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryCache_SetAndGet-4   	18691801	        64.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRistretto_Set-4           	10051786	       448.1 ns/op	     152 B/op	       2 allocs/op
+BenchmarkRistretto_Get-4           	12461653	        85.71 ns/op	      18 B/op	       1 allocs/op
+BenchmarkRistretto_SetAndGet-4     	 7832054	       159.4 ns/op	      46 B/op	       1 allocs/op
+BenchmarkTheine_Set-4              	 4692495	       274.3 ns/op	      51 B/op	       0 allocs/op
+BenchmarkTheine_Get-4              	14084695	        85.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTheine_SetAndGet-4        	 6135094	       199.9 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  65.498s
+ok  	github.com/lxzan/memorycache/benchmark	60.259s
 ```

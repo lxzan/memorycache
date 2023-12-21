@@ -2,13 +2,13 @@ package memorycache
 
 import (
 	"context"
-	"github.com/lxzan/dao/deque"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/maphash"
+	"github.com/lxzan/dao/deque"
 	"github.com/lxzan/memorycache/internal/containers"
 	"github.com/lxzan/memorycache/internal/utils"
 )

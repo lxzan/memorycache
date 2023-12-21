@@ -25,4 +25,4 @@ jobs:
       run: go test -v ./...
       
     - name: Bench
-      run: go work init && go work use benchmark && make bench
+      run: make bench

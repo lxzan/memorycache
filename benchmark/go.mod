@@ -16,6 +16,7 @@ require (
 	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
+	github.com/lxzan/dao v1.1.2 // indirect
 	github.com/ncw/directio v1.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect

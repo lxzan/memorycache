@@ -22,7 +22,7 @@ var (
 	options = []memorycache.Option{
 		memorycache.WithBucketNum(sharding),
 		memorycache.WithBucketSize(capacity/10, capacity),
-		memorycache.WithSwissTable(true),
+		memorycache.WithSwissTable(false),
 		memorycache.WithLRU(true),
 	}
 )

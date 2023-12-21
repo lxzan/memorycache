@@ -17,25 +17,24 @@
 
 **缓存淘汰策略：**
 
-1. Set 方法清理溢出的键值对
-2. 周期清理过期的键值对
+- Set 方法清理溢出的键值对
+- 周期清理过期的键值对
 
 ### 原则：
 
-1. 存储数据限制：受最大容量限制
-2. 过期时间：支持
-3. 缓存驱逐策略：LRU
-4. GC 优化：无
-5. 持久化：无
-6. 锁定机制：分片和互斥锁
+- 存储数据限制：受最大容量限制
+- 过期时间：支持
+- 缓存驱逐策略：LRU
+- GC 优化：无
+- 持久化：无
+- 锁定机制：分片和互斥锁
 
 ### 优势：
 
-1. 简单易用
-2. 无需第三方依赖
-3. 高性能
-4. 内存占用低
-5. 使用四叉堆维护过期时间, 有效降低树高度, 提高插入性能
+- 简单易用
+- 高性能
+- 内存占用低
+- 使用四叉堆维护过期时间, 有效降低树高度, 提高插入性能
 
 ### 方法：
 
@@ -85,20 +84,19 @@ func main() {
 -   1,000,000 元素
 
 ```
-go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
-BenchmarkMemoryCache_Set-12             18891738               109.5 ns/op            11 B/op          0 allocs/op
-BenchmarkMemoryCache_Get-12             21813127                48.21 ns/op            0 B/op          0 allocs/op
-BenchmarkMemoryCache_SetAndGet-12       22530026                52.14 ns/op            0 B/op          0 allocs/op
-BenchmarkRistretto_Set-12               13786928               140.6 ns/op           116 B/op          2 allocs/op
-BenchmarkRistretto_Get-12               26299240                45.87 ns/op           16 B/op          1 allocs/op
-BenchmarkRistretto_SetAndGet-12         11360748               103.0 ns/op            27 B/op          1 allocs/op
-BenchmarkTheine_Set-12                   3527848               358.2 ns/op            19 B/op          0 allocs/op
-BenchmarkTheine_Get-12                  23234760                49.37 ns/op            0 B/op          0 allocs/op
-BenchmarkTheine_SetAndGet-12             6755134               176.3 ns/op             0 B/op          0 allocs/op
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkMemoryCache_Set-4         	10949929	        99.34 ns/op	      27 B/op	       0 allocs/op
+BenchmarkMemoryCache_Get-4         	19481263	        61.18 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryCache_SetAndGet-4   	18691801	        64.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRistretto_Set-4           	10051786	       448.1 ns/op	     152 B/op	       2 allocs/op
+BenchmarkRistretto_Get-4           	12461653	        85.71 ns/op	      18 B/op	       1 allocs/op
+BenchmarkRistretto_SetAndGet-4     	 7832054	       159.4 ns/op	      46 B/op	       1 allocs/op
+BenchmarkTheine_Set-4              	 4692495	       274.3 ns/op	      51 B/op	       0 allocs/op
+BenchmarkTheine_Get-4              	14084695	        85.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTheine_SetAndGet-4        	 6135094	       199.9 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  65.498s
+ok  	github.com/lxzan/memorycache/benchmark	60.259s
 ```
