@@ -1,5 +1,7 @@
 package memorycache
 
+import "github.com/lxzan/dao/deque"
+
 // Reason 回调函数触发原因
 type Reason uint8
 
@@ -12,8 +14,8 @@ const (
 type CallbackFunc[T any] func(element T, reason Reason)
 
 type Element[K comparable, V any] struct {
-	// 前后指针
-	prev, next *Element[K, V]
+	// 地址
+	addr deque.Pointer
 
 	// 索引
 	index int

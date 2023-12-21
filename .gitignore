@@ -3,5 +3,6 @@
 vendor/
 cmd/
 bin/
+examples/
 go.work*
 .DS_Store

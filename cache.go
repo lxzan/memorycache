@@ -2,6 +2,7 @@ package memorycache
 
 import (
 	"context"
+	"github.com/lxzan/dao/deque"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -45,12 +46,8 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 	mc.timestamp.Store(time.Now().UnixMilli())
 
 	for i, _ := range mc.storage {
-		mc.storage[i] = &bucket[K, V]{
-			conf: conf,
-			Map:  containers.NewMap[K, *Element[K, V]](conf.BucketSize, conf.SwissTable),
-			Heap: newHeap[K, V](conf.BucketSize),
-			List: newQueue[K, V](conf.LRU),
-		}
+		b := (&bucket[K, V]{conf: conf}).init()
+		mc.storage[i] = b
 	}
 
 	go func() {
@@ -102,9 +99,7 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 func (c *MemoryCache[K, V]) Clear() {
 	for _, b := range c.storage {
 		b.Lock()
-		b.Heap = newHeap[K, V](c.conf.BucketSize)
-		b.Map = containers.NewMap[K, *Element[K, V]](c.conf.BucketSize, c.conf.SwissTable)
-		b.List = newQueue[K, V](c.conf.LRU)
+		b.init()
 		b.Unlock()
 	}
 }
@@ -187,7 +182,7 @@ func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 	if !ok {
 		return v, false
 	}
-	b.List.MoveToBack(ele)
+	b.List.MoveToBack(ele.addr)
 	return ele.Value, true
 }
 
@@ -283,7 +278,15 @@ type bucket[K comparable, V any] struct {
 	conf *config
 	Map  containers.Map[K, *Element[K, V]]
 	Heap *heap[K, V]
-	List *queue[K, V]
+	List *deque.Deque[*Element[K, V]]
+}
+
+func (c *bucket[K, V]) init() *bucket[K, V] {
+	c.Map = containers.NewMap[K, *Element[K, V]](c.conf.BucketSize, c.conf.SwissTable)
+	c.Heap = newHeap[K, V](c.conf.BucketSize)
+	capacity := utils.SelectValue(c.conf.LRU, c.conf.BucketSize, 0)
+	c.List = deque.New[*Element[K, V]](capacity)
+	return c
 }
 
 // Check 过期时间检查
@@ -300,7 +303,7 @@ func (c *bucket[K, V]) Check(now int64, num int) int {
 }
 
 func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
-	c.List.Delete(ele)
+	c.List.Remove(ele.addr)
 	c.Heap.Delete(ele.index)
 	c.Map.Delete(ele.Key)
 	ele.cb(ele, reason)
@@ -308,17 +311,25 @@ func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
 
 func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
 	c.Heap.UpdateTTL(ele, expireAt)
-	c.List.MoveToBack(ele)
+	c.List.MoveToBack(ele.addr)
 }
 
 func (c *bucket[K, V]) Insert(key K, value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
 	if c.Heap.Len() >= c.conf.BucketCap {
-		head := utils.SelectValue(c.conf.LRU, c.List.Front(), c.Heap.Front())
-		c.Delete(head, ReasonEvicted)
+		c.Delete(c.GetEvictedElem(), ReasonEvicted)
 	}
 
 	var ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
-	c.List.PushBack(ele)
 	c.Heap.Push(ele)
 	c.Map.Put(key, ele)
+	if c.conf.LRU {
+		ele.addr = c.List.PushBack(ele).Addr()
+	}
+}
+
+func (c *bucket[K, V]) GetEvictedElem() *Element[K, V] {
+	if c.conf.LRU {
+		return c.List.Front().Value()
+	}
+	return c.Heap.Front()
 }
