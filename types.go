@@ -20,6 +20,9 @@ type Element[K comparable, V any] struct {
 	// 索引
 	index int
 
+	// 哈希
+	hashcode uint64
+
 	// 回调函数
 	cb CallbackFunc[*Element[K, V]]
 

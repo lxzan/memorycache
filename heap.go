@@ -1,5 +1,7 @@
 package memorycache
 
+import "github.com/lxzan/dao/algorithm"
+
 // newHeap 新建一个堆
 // Create a new heap
 func newHeap[K comparable, V any](cap int) *heap[K, V] {
@@ -11,13 +13,6 @@ type heap[K comparable, V any] struct {
 }
 
 func (c *heap[K, V]) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
-
-func (c *heap[K, V]) min(i, j int) int {
-	if c.Data[i].ExpireAt < c.Data[j].ExpireAt {
-		return i
-	}
-	return j
-}
 
 func (c *heap[K, V]) UpdateTTL(ele *Element[K, V], exp int64) {
 	var down = exp > ele.ExpireAt
@@ -88,29 +83,22 @@ func (c *heap[K, V]) Delete(i int) {
 }
 
 func (c *heap[K, V]) Down(i, n int) {
-	var index1 = i<<2 + 1
-	if index1 >= n {
+	var base = i << 2
+	var index = base + 1
+	if index >= n {
 		return
 	}
 
-	var index2 = i<<2 + 2
-	var index3 = i<<2 + 3
-	var index4 = i<<2 + 4
-	var j = -1
-
-	if index4 < n {
-		j = c.min(c.min(index1, index2), c.min(index3, index4))
-	} else if index3 < n {
-		j = c.min(c.min(index1, index2), index3)
-	} else if index2 < n {
-		j = c.min(index1, index2)
-	} else {
-		j = index1
+	var end = algorithm.Min(base+4, n-1)
+	for j := base + 2; j <= end; j++ {
+		if c.Less(j, index) {
+			index = j
+		}
 	}
 
-	if j >= 0 && c.Less(j, i) {
-		c.Swap(i, j)
-		c.Down(j, n)
+	if c.Less(index, i) {
+		c.Swap(i, index)
+		c.Down(index, n)
 	}
 }
 

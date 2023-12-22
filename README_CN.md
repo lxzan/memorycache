@@ -7,13 +7,16 @@
 [![Build Status][1]][2] [![codecov][3]][4]
 
 [1]: https://github.com/lxzan/memorycache/workflows/Go%20Test/badge.svg?branch=main
+
 [2]: https://github.com/lxzan/memorycache/actions?query=branch%3Amain
+
 [3]: https://codecov.io/gh/lxzan/memorycache/graph/badge.svg?token=OHD6918OPT
+
 [4]: https://codecov.io/gh/lxzan/memorycache
 
 ### 简介：
 
-极简的内存键值（KV）存储系统，其核心由哈希表(HashMap) 和最小四叉堆(Minimal Quad Heap) 构成，没有进行垃圾回收（GC）优化。
+极简的内存键值（KV）存储系统，其核心由哈希表(HashMap) 和最小四叉堆(Minimal Quad Heap) 构成.
 
 **缓存淘汰策略：**
 
@@ -25,9 +28,9 @@
 - 存储数据限制：受最大容量限制
 - 过期时间：支持
 - 缓存驱逐策略：LRU
-- GC 优化：无
 - 持久化：无
 - 锁定机制：分片和互斥锁
+- GC 优化：使用 `dao/deque` 减少链表指针数量; 使用整数作为 Map KV
 
 ### 优势：
 
@@ -81,22 +84,22 @@ func main() {
 
 ### 基准测试
 
--   1,000,000 元素
+- 1,000,000 元素
 
 ```
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
-cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkMemoryCache_Set-4         	10949929	        99.34 ns/op	      27 B/op	       0 allocs/op
-BenchmarkMemoryCache_Get-4         	19481263	        61.18 ns/op	       0 B/op	       0 allocs/op
-BenchmarkMemoryCache_SetAndGet-4   	18691801	        64.24 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRistretto_Set-4           	10051786	       448.1 ns/op	     152 B/op	       2 allocs/op
-BenchmarkRistretto_Get-4           	12461653	        85.71 ns/op	      18 B/op	       1 allocs/op
-BenchmarkRistretto_SetAndGet-4     	 7832054	       159.4 ns/op	      46 B/op	       1 allocs/op
-BenchmarkTheine_Set-4              	 4692495	       274.3 ns/op	      51 B/op	       0 allocs/op
-BenchmarkTheine_Get-4              	14084695	        85.59 ns/op	       0 B/op	       0 allocs/op
-BenchmarkTheine_SetAndGet-4        	 6135094	       199.9 ns/op	       0 B/op	       0 allocs/op
+cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
+BenchmarkMemoryCache_Set-8              16107153                74.85 ns/op           15 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-8              28859542                42.34 ns/op            0 B/op          0 allocs/op
+BenchmarkMemoryCache_SetAndGet-8        27317874                63.02 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-8                13343023               272.6 ns/op           120 B/op          2 allocs/op
+BenchmarkRistretto_Get-8                19799044                55.06 ns/op           17 B/op          1 allocs/op
+BenchmarkRistretto_SetAndGet-8          11212923               119.6 ns/op            30 B/op          1 allocs/op
+BenchmarkTheine_Set-8                    3775975               322.5 ns/op            30 B/op          0 allocs/op
+BenchmarkTheine_Get-8                   21579301                54.94 ns/op            0 B/op          0 allocs/op
+BenchmarkTheine_SetAndGet-8              6265330               224.6 ns/op             0 B/op          0 allocs/op
 PASS
-ok  	github.com/lxzan/memorycache/benchmark	60.259s
+ok      github.com/lxzan/memorycache/benchmark  53.498s
 ```
