@@ -178,7 +178,7 @@ func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
-	ele, ok := c.fetch(c.getBucket(key), key)
+	ele, ok := c.fetch(b, key)
 	if !ok {
 		return v, false
 	}
