@@ -161,7 +161,6 @@ func TestMemoryCache_Set(t *testing.T) {
 		var mc = New[string, any](
 			WithBucketNum(1),
 			WithBucketSize(0, 2),
-			WithLRU(true),
 		)
 		mc.Set("ming", 1, 3*time.Hour)
 		mc.Set("hong", 1, 1*time.Hour)
@@ -184,7 +183,8 @@ func TestMemoryCache_Set(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -193,7 +193,8 @@ func TestMemoryCache_Set(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -309,7 +310,8 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -318,7 +320,8 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -400,7 +403,8 @@ func TestMemoryCache_Delete(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -409,7 +413,8 @@ func TestMemoryCache_Delete(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -581,7 +586,6 @@ func TestMemoryCache_LRU(t *testing.T) {
 	const count = 10000
 	var mc = New[string, int](
 		WithBucketNum(1),
-		WithLRU(true),
 	)
 	var indexes []int
 	for i := 0; i < count; i++ {
@@ -600,7 +604,7 @@ func TestMemoryCache_LRU(t *testing.T) {
 	var keys []string
 	var q = mc.storage[0].List
 	for q.Len() > 0 {
-		keys = append(keys, q.Pop().Key)
+		keys = append(keys, q.PopFront().Key)
 	}
 	for i, item := range indexes {
 		key := strconv.Itoa(item)
@@ -608,47 +612,104 @@ func TestMemoryCache_LRU(t *testing.T) {
 	}
 }
 
-func TestMemoryCache_Random(t *testing.T) {
-	var mc = New[string, int](
-		WithLRU(true),
-	)
-	const count = 10000
-	for i := 0; i < count; i++ {
-		var key = string(utils.AlphabetNumeric.Generate(3))
-		var val = utils.AlphabetNumeric.Intn(count)
-		mc.Set(key, val, time.Hour)
-	}
-
-	for i := 0; i < count; i++ {
-		var key = string(utils.AlphabetNumeric.Generate(3))
-		var val = utils.AlphabetNumeric.Intn(count)
-		switch utils.AlphabetNumeric.Intn(7) {
-		case 0:
-			mc.Set(key, val, time.Hour)
-		case 1:
-			mc.SetWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
-		case 2:
-			mc.Get(key)
-		case 3:
-			mc.GetWithTTL(key, time.Hour)
-		case 4:
-			mc.GetOrCreate(key, val, time.Hour)
-		case 5:
-			mc.GetOrCreateWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
-		case 6:
-			mc.Delete(key)
-		}
-	}
-
-	for _, b := range mc.storage {
-		assert.Equal(t, b.Map.Count(), b.Heap.Len())
-		assert.Equal(t, b.Heap.Len(), b.List.Len())
-		b.Map.Iter(func(k string, v *Element[string, int]) (stop bool) {
-			var v1 = b.Heap.Data[v.index]
-			assert.Equal(t, v.Key, v1.Key)
-			assert.Equal(t, v.Value, v1.Value)
-			return true
+func TestMemoryCache_Conflict(t *testing.T) {
+	t.Run("", func(t *testing.T) {
+		var mc = New[string, any]()
+		var wg = &sync.WaitGroup{}
+		wg.Add(1)
+		mc.hasher = new(utils.Fnv32Hasher)
+		mc.SetWithCallback("O4XOUsgCQqkVCvLQ", 1, time.Hour, func(element *Element[string, any], reason Reason) {
+			assert.Equal(t, element.Value, 1)
+			wg.Done()
 		})
-		assert.True(t, isSorted(b.Heap))
-	}
+		assert.False(t, mc.Set("wYLAGPVADrDTi7VT", 2, time.Hour))
+		assert.True(t, mc.Set("wYLAGPVADrDTi7VT", 2, time.Hour))
+
+		v1, ok1 := mc.Get("O4XOUsgCQqkVCvLQ")
+		assert.False(t, ok1)
+		assert.Nil(t, v1)
+
+		v2, ok2 := mc.Get("wYLAGPVADrDTi7VT")
+		assert.True(t, ok2)
+		assert.Equal(t, v2, 2)
+		assert.Equal(t, mc.Len(), 1)
+		wg.Wait()
+	})
+
+	t.Run("", func(t *testing.T) {
+		var mc = New[string, any]()
+		var wg = &sync.WaitGroup{}
+		wg.Add(1)
+		mc.hasher = new(utils.Fnv32Hasher)
+		mc.SetWithCallback("O4XOUsgCQqkVCvLQ", 1, time.Hour, func(element *Element[string, any], reason Reason) {
+			assert.Equal(t, element.Value, 1)
+			wg.Done()
+		})
+
+		v1, ok1 := mc.Get("O4XOUsgCQqkVCvLQ")
+		assert.True(t, ok1)
+		assert.Equal(t, v1, 1)
+
+		v2, ok2 := mc.GetOrCreate("wYLAGPVADrDTi7VT", 2, time.Hour)
+		assert.False(t, ok2)
+		assert.Equal(t, v2, 2)
+
+		v3, ok3 := mc.GetOrCreate("wYLAGPVADrDTi7VT", 3, time.Hour)
+		assert.True(t, ok3)
+		assert.Equal(t, v3, 2)
+		assert.Equal(t, mc.Len(), 1)
+
+		wg.Wait()
+	})
+}
+
+func TestMemoryCache_Random(t *testing.T) {
+	t.Run("with lru", func(t *testing.T) {
+		const count = 10000
+		var mc = New[string, int](
+			WithBucketNum(16),
+			WithBucketSize(100, 625),
+		)
+		for i := 0; i < count; i++ {
+			var key = string(utils.AlphabetNumeric.Generate(3))
+			var val = utils.AlphabetNumeric.Intn(count)
+			mc.Set(key, val, time.Hour)
+		}
+
+		for i := 0; i < count; i++ {
+			var key = string(utils.AlphabetNumeric.Generate(3))
+			var val = utils.AlphabetNumeric.Intn(count)
+			switch utils.AlphabetNumeric.Intn(8) {
+			case 0, 1:
+				mc.Set(key, val, time.Hour)
+			case 2:
+				mc.SetWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
+			case 3:
+				mc.Get(key)
+			case 4:
+				mc.GetWithTTL(key, time.Hour)
+			case 5:
+				mc.GetOrCreate(key, val, time.Hour)
+			case 6:
+				mc.GetOrCreateWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
+			case 7:
+				mc.Delete(key)
+			}
+		}
+
+		for _, b := range mc.storage {
+			assert.Equal(t, b.Map.Count(), b.Heap.Len())
+			assert.Equal(t, b.Heap.Len(), b.List.Len())
+			b.List.Range(func(ele *Element[string, int]) bool {
+				var v = ele
+				var v1 = b.Heap.Data[v.index]
+				assert.Equal(t, v.addr, v1)
+
+				var v2, _ = b.Map.Get(v.hashcode)
+				assert.Equal(t, v.addr, v2)
+				return true
+			})
+			assert.True(t, isSorted(b.Heap))
+		}
+	})
 }

@@ -7,35 +7,37 @@
 [![Build Status][1]][2] [![codecov][3]][4]
 
 [1]: https://github.com/lxzan/memorycache/workflows/Go%20Test/badge.svg?branch=main
+
 [2]: https://github.com/lxzan/memorycache/actions?query=branch%3Amain
+
 [3]: https://codecov.io/gh/lxzan/memorycache/graph/badge.svg?token=OHD6918OPT
+
 [4]: https://codecov.io/gh/lxzan/memorycache
 
 ### 简介：
 
-极简的内存键值（KV）存储系统，其核心由哈希表(HashMap) 和最小四叉堆(Minimal Quad Heap) 构成，没有进行垃圾回收（GC）优化。
+极简的内存键值（KV）存储系统，其核心由哈希表(HashMap) 和最小四叉堆(Minimal Quad Heap) 构成.
 
 **缓存淘汰策略：**
 
-1. Set 方法清理溢出的键值对
-2. 周期清理过期的键值对
+- Set 方法清理溢出的键值对
+- 周期清理过期的键值对
 
 ### 原则：
 
-1. 存储数据限制：受最大容量限制
-2. 过期时间：支持
-3. 缓存驱逐策略：LRU
-4. GC 优化：无
-5. 持久化：无
-6. 锁定机制：分片和互斥锁
+- 存储数据限制：受最大容量限制
+- 过期时间：支持
+- 缓存驱逐策略：LRU
+- 持久化：无
+- 锁定机制：分片和互斥锁
+- GC 优化：无指针技术实现的哈希表, 最小堆和链表(不包括用户KV)
 
 ### 优势：
 
-1. 简单易用
-2. 无需第三方依赖
-3. 高性能
-4. 内存占用低
-5. 使用四叉堆维护过期时间, 有效降低树高度, 提高插入性能
+- 简单易用
+- 高性能
+- 内存占用低
+- 使用四叉堆维护过期时间, 有效降低树高度, 提高插入性能
 
 ### 方法：
 
@@ -82,23 +84,22 @@ func main() {
 
 ### 基准测试
 
--   1,000,000 元素
+- 1,000,000 元素
 
 ```
-go test -benchmem -run=^$ -bench . github.com/lxzan/memorycache/benchmark
 goos: linux
 goarch: amd64
 pkg: github.com/lxzan/memorycache/benchmark
 cpu: AMD Ryzen 5 PRO 4650G with Radeon Graphics
-BenchmarkMemoryCache_Set-12             18891738               109.5 ns/op            11 B/op          0 allocs/op
-BenchmarkMemoryCache_Get-12             21813127                48.21 ns/op            0 B/op          0 allocs/op
-BenchmarkMemoryCache_SetAndGet-12       22530026                52.14 ns/op            0 B/op          0 allocs/op
-BenchmarkRistretto_Set-12               13786928               140.6 ns/op           116 B/op          2 allocs/op
-BenchmarkRistretto_Get-12               26299240                45.87 ns/op           16 B/op          1 allocs/op
-BenchmarkRistretto_SetAndGet-12         11360748               103.0 ns/op            27 B/op          1 allocs/op
-BenchmarkTheine_Set-12                   3527848               358.2 ns/op            19 B/op          0 allocs/op
-BenchmarkTheine_Get-12                  23234760                49.37 ns/op            0 B/op          0 allocs/op
-BenchmarkTheine_SetAndGet-12             6755134               176.3 ns/op             0 B/op          0 allocs/op
+BenchmarkMemoryCache_Set-8              16107153                74.85 ns/op           15 B/op          0 allocs/op
+BenchmarkMemoryCache_Get-8              28859542                42.34 ns/op            0 B/op          0 allocs/op
+BenchmarkMemoryCache_SetAndGet-8        27317874                63.02 ns/op            0 B/op          0 allocs/op
+BenchmarkRistretto_Set-8                13343023               272.6 ns/op           120 B/op          2 allocs/op
+BenchmarkRistretto_Get-8                19799044                55.06 ns/op           17 B/op          1 allocs/op
+BenchmarkRistretto_SetAndGet-8          11212923               119.6 ns/op            30 B/op          1 allocs/op
+BenchmarkTheine_Set-8                    3775975               322.5 ns/op            30 B/op          0 allocs/op
+BenchmarkTheine_Get-8                   21579301                54.94 ns/op            0 B/op          0 allocs/op
+BenchmarkTheine_SetAndGet-8              6265330               224.6 ns/op             0 B/op          0 allocs/op
 PASS
-ok      github.com/lxzan/memorycache/benchmark  65.498s
+ok      github.com/lxzan/memorycache/benchmark  53.498s
 ```

@@ -1,22 +1,22 @@
 package memorycache
 
+import "github.com/lxzan/dao/algorithm"
+
 // newHeap 新建一个堆
 // Create a new heap
-func newHeap[K comparable, V any](cap int) *heap[K, V] {
-	return &heap[K, V]{Data: make([]*Element[K, V], 0, cap)}
+func newHeap[K comparable, V any](q *deque[K, V], cap int) *heap[K, V] {
+	return &heap[K, V]{List: q, Data: make([]pointer, 0, cap)}
 }
 
 type heap[K comparable, V any] struct {
-	Data []*Element[K, V]
+	List *deque[K, V]
+	Data []pointer
 }
 
-func (c *heap[K, V]) Less(i, j int) bool { return c.Data[i].ExpireAt < c.Data[j].ExpireAt }
-
-func (c *heap[K, V]) min(i, j int) int {
-	if c.Data[i].ExpireAt < c.Data[j].ExpireAt {
-		return i
-	}
-	return j
+func (c *heap[K, V]) Less(i, j int) bool {
+	p0 := c.Data[i]
+	p1 := c.Data[j]
+	return c.List.Get(p0).ExpireAt < c.List.Get(p1).ExpireAt
 }
 
 func (c *heap[K, V]) UpdateTTL(ele *Element[K, V], exp int64) {
@@ -34,13 +34,15 @@ func (c *heap[K, V]) Len() int {
 }
 
 func (c *heap[K, V]) Swap(i, j int) {
-	c.Data[i].index, c.Data[j].index = c.Data[j].index, c.Data[i].index
+	x := c.List.Get(c.Data[i])
+	y := c.List.Get(c.Data[j])
+	x.index, y.index = y.index, x.index
 	c.Data[i], c.Data[j] = c.Data[j], c.Data[i]
 }
 
 func (c *heap[K, V]) Push(ele *Element[K, V]) {
 	ele.index = c.Len()
-	c.Data = append(c.Data, ele)
+	c.Data = append(c.Data, ele.addr)
 	c.Up(c.Len() - 1)
 }
 
@@ -52,7 +54,7 @@ func (c *heap[K, V]) Up(i int) {
 	}
 }
 
-func (c *heap[K, V]) Pop() (ele *Element[K, V]) {
+func (c *heap[K, V]) Pop() (ele pointer) {
 	var n = c.Len()
 	switch n {
 	case 0:
@@ -88,34 +90,27 @@ func (c *heap[K, V]) Delete(i int) {
 }
 
 func (c *heap[K, V]) Down(i, n int) {
-	var index1 = i<<2 + 1
-	if index1 >= n {
+	var base = i << 2
+	var index = base + 1
+	if index >= n {
 		return
 	}
 
-	var index2 = i<<2 + 2
-	var index3 = i<<2 + 3
-	var index4 = i<<2 + 4
-	var j = -1
-
-	if index4 < n {
-		j = c.min(c.min(index1, index2), c.min(index3, index4))
-	} else if index3 < n {
-		j = c.min(c.min(index1, index2), index3)
-	} else if index2 < n {
-		j = c.min(index1, index2)
-	} else {
-		j = index1
+	var end = algorithm.Min(base+4, n-1)
+	for j := base + 2; j <= end; j++ {
+		if c.Less(j, index) {
+			index = j
+		}
 	}
 
-	if j >= 0 && c.Less(j, i) {
-		c.Swap(i, j)
-		c.Down(j, n)
+	if c.Less(index, i) {
+		c.Swap(i, index)
+		c.Down(index, n)
 	}
 }
 
 // Front 访问堆顶元素
 // Accessing the top Element of the heap
 func (c *heap[K, V]) Front() *Element[K, V] {
-	return c.Data[0]
+	return c.List.Get(c.Data[0])
 }

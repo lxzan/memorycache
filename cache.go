@@ -15,7 +15,7 @@ import (
 type MemoryCache[K comparable, V any] struct {
 	conf      *config
 	storage   []*bucket[K, V]
-	hasher    maphash.Hasher[K]
+	hasher    utils.Hasher[K]
 	timestamp atomic.Int64
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -27,7 +27,7 @@ type MemoryCache[K comparable, V any] struct {
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
 func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
-	var conf = &config{CachedTime: true, LRU: true}
+	var conf = &config{CachedTime: true}
 	options = append(options, withInitialize())
 	for _, fn := range options {
 		fn(conf)
@@ -45,12 +45,8 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 	mc.timestamp.Store(time.Now().UnixMilli())
 
 	for i, _ := range mc.storage {
-		mc.storage[i] = &bucket[K, V]{
-			conf: conf,
-			Map:  containers.NewMap[K, *Element[K, V]](conf.BucketSize, conf.SwissTable),
-			Heap: newHeap[K, V](conf.BucketSize),
-			List: newQueue[K, V](conf.LRU),
-		}
+		b := (&bucket[K, V]{conf: conf}).init()
+		mc.storage[i] = b
 	}
 
 	go func() {
@@ -102,9 +98,7 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 func (c *MemoryCache[K, V]) Clear() {
 	for _, b := range c.storage {
 		b.Lock()
-		b.Heap = newHeap[K, V](c.conf.BucketSize)
-		b.Map = containers.NewMap[K, *Element[K, V]](c.conf.BucketSize, c.conf.SwissTable)
-		b.List = newQueue[K, V](c.conf.LRU)
+		b.init()
 		b.Unlock()
 	}
 }
@@ -115,11 +109,6 @@ func (c *MemoryCache[K, V]) Stop() {
 		c.cancel()
 		c.wg.Wait()
 	})
-}
-
-func (c *MemoryCache[K, V]) getBucket(key K) *bucket[K, V] {
-	var idx = c.hasher.Hash(key) & uint64(c.conf.BucketNum-1)
-	return c.storage[idx]
 }
 
 func (c *MemoryCache[K, V]) getTimestamp() int64 {
@@ -137,43 +126,59 @@ func (c *MemoryCache[K, V]) getExp(d time.Duration) int64 {
 	return c.getTimestamp() + d.Milliseconds()
 }
 
+func (c *MemoryCache[K, V]) getBucket(key K) bucketWrapper[K, V] {
+	var hashcode = c.hasher.Hash(key)
+	var index = hashcode & uint64(c.conf.BucketNum-1)
+	return bucketWrapper[K, V]{bucket: c.storage[index], hashcode: hashcode}
+}
+
 // 查找数据. 如果存在且超时, 删除并返回false
-func (c *MemoryCache[K, V]) fetch(b *bucket[K, V], key K) (*Element[K, V], bool) {
-	ele, exist := b.Map.Get(key)
-	if !exist {
-		return nil, false
+// @ele 查找结果
+// @conflict 是否哈希冲突
+// @exist 是否存在
+func (c *MemoryCache[K, V]) fetch(b bucketWrapper[K, V], key K) (ele *Element[K, V], conflict, exist bool) {
+	addr, ok := b.Map.Get(b.hashcode)
+	if !ok {
+		return nil, false, false
 	}
 
+	ele = b.List.Get(addr)
 	if ele.expired(c.getTimestamp()) {
 		b.Delete(ele, ReasonExpired)
-		return nil, false
+		return nil, false, false
 	}
 
-	return ele, true
+	return ele, key != ele.Key, true
 }
 
 // Set 设置键值和过期时间. exp<=0表示永不过期.
 // Set the key value and expiration time. exp<=0 means never expire.
-func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (replaced bool) {
+func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (exist bool) {
 	return c.SetWithCallback(key, value, exp, c.callback)
 }
 
 // SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会触发回调.
 // Set the key value, expiration time and callback function. The callback is triggered by both capacity overflow and expiration.
-func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (replaced bool) {
+func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
 	var expireAt = c.getExp(exp)
-	ele, ok := c.fetch(b, key)
+	ele, conflict, ok := c.fetch(b, key)
+	if conflict {
+		ok = false
+		b.Delete(ele, ReasonEvicted)
+	}
 	if ok {
 		ele.Value, ele.cb = value, cb
 		b.UpdateTTL(ele, expireAt)
 		return true
 	}
 
-	b.Insert(key, value, expireAt, cb)
+	ele = b.GetElement()
+	ele.Key, ele.Value, ele.ExpireAt, ele.hashcode, ele.cb = key, value, expireAt, b.hashcode, cb
+	b.Insert(ele)
 	return false
 }
 
@@ -183,11 +188,13 @@ func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
-	ele, ok := c.fetch(c.getBucket(key), key)
-	if !ok {
+
+	ele, conflict, ok := c.fetch(b, key)
+	if !ok || conflict {
 		return v, false
 	}
-	b.List.MoveToBack(ele)
+
+	b.List.MoveToBack(ele.addr)
 	return ele.Value, true
 }
 
@@ -198,8 +205,8 @@ func (c *MemoryCache[K, V]) GetWithTTL(key K, exp time.Duration) (v V, exist boo
 	b.Lock()
 	defer b.Unlock()
 
-	ele, ok := c.fetch(b, key)
-	if !ok {
+	ele, conflict, ok := c.fetch(b, key)
+	if !ok || conflict {
 		return v, false
 	}
 
@@ -221,30 +228,36 @@ func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Dur
 	defer b.Unlock()
 
 	expireAt := c.getExp(exp)
-	ele, ok := c.fetch(b, key)
+	ele, conflict, ok := c.fetch(b, key)
+	if conflict {
+		ok = false
+		b.Delete(ele, ReasonEvicted)
+	}
 	if ok {
 		b.UpdateTTL(ele, expireAt)
 		return ele.Value, true
 	}
 
-	b.Insert(key, value, expireAt, cb)
+	ele = b.GetElement()
+	ele.Key, ele.Value, ele.ExpireAt, ele.hashcode, ele.cb = key, value, expireAt, b.hashcode, cb
+	b.Insert(ele)
 	return value, false
 }
 
 // Delete 删除缓存
 // delete cache
-func (c *MemoryCache[K, V]) Delete(key K) (deleted bool) {
+func (c *MemoryCache[K, V]) Delete(key K) (exist bool) {
 	var b = c.getBucket(key)
 	b.Lock()
 	defer b.Unlock()
 
-	ele, ok := c.fetch(b, key)
-	if !ok {
-		return false
+	ele, conflict, ok := c.fetch(b, key)
+	if ok && !conflict {
+		b.Delete(ele, ReasonDeleted)
+		return true
 	}
 
-	b.Delete(ele, ReasonDeleted)
-	return true
+	return false
 }
 
 // Range 遍历缓存. 注意: 不要在回调函数里面操作 MemoryCache[K, V] 实例, 可能会造成死锁.
@@ -253,8 +266,8 @@ func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		for _, ele := range b.Heap.Data {
-			if ele.expired(now) {
+		for _, ele := range b.List.elements {
+			if ele.addr == null || ele.expired(now) {
 				continue
 			}
 			if !f(ele.Key, ele.Value) {
@@ -278,12 +291,26 @@ func (c *MemoryCache[K, V]) Len() int {
 	return num
 }
 
-type bucket[K comparable, V any] struct {
-	sync.Mutex
-	conf *config
-	Map  containers.Map[K, *Element[K, V]]
-	Heap *heap[K, V]
-	List *queue[K, V]
+type (
+	bucket[K comparable, V any] struct {
+		sync.Mutex
+		conf *config
+		Map  containers.Map[uint64, pointer]
+		Heap *heap[K, V]
+		List *deque[K, V]
+	}
+
+	bucketWrapper[K comparable, V any] struct {
+		*bucket[K, V]
+		hashcode uint64
+	}
+)
+
+func (c *bucket[K, V]) init() *bucket[K, V] {
+	c.Map = containers.NewMap[uint64, pointer](c.conf.BucketSize, c.conf.SwissTable)
+	c.List = newDeque[K, V](c.conf.BucketSize)
+	c.Heap = newHeap[K, V](c.List, c.conf.BucketSize)
+	return c
 }
 
 // Check 过期时间检查
@@ -300,25 +327,25 @@ func (c *bucket[K, V]) Check(now int64, num int) int {
 }
 
 func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
-	c.List.Delete(ele)
 	c.Heap.Delete(ele.index)
-	c.Map.Delete(ele.Key)
+	c.Map.Delete(ele.hashcode)
 	ele.cb(ele, reason)
+	c.List.Remove(ele.addr) // 必须最后删除List, 因为会清空*Element[K, V]数据
 }
 
 func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
 	c.Heap.UpdateTTL(ele, expireAt)
-	c.List.MoveToBack(ele)
+	c.List.MoveToBack(ele.addr)
 }
 
-func (c *bucket[K, V]) Insert(key K, value V, expireAt int64, cb CallbackFunc[*Element[K, V]]) {
-	if c.Heap.Len() >= c.conf.BucketCap {
-		head := utils.SelectValue(c.conf.LRU, c.List.Front(), c.Heap.Front())
-		c.Delete(head, ReasonEvicted)
+func (c *bucket[K, V]) GetElement() *Element[K, V] {
+	if c.List.Len() >= c.conf.BucketCap {
+		c.Delete(c.List.Front(), ReasonEvicted)
 	}
+	return c.List.PushBack()
+}
 
-	var ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb}
-	c.List.PushBack(ele)
+func (c *bucket[K, V]) Insert(ele *Element[K, V]) {
 	c.Heap.Push(ele)
-	c.Map.Put(key, ele)
+	c.Map.Put(ele.hashcode, ele.addr)
 }

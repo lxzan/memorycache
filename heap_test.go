@@ -13,7 +13,8 @@ func isSorted[K comparable, V any](h *heap[K, V]) bool {
 	var list0 []int
 	var list1 []int
 	for h.Len() > 0 {
-		v := h.Pop()
+		addr := h.Pop()
+		v := h.List.Get(addr)
 		list0 = append(list0, int(v.ExpireAt))
 		list1 = append(list1, int(v.ExpireAt))
 	}
@@ -23,39 +24,49 @@ func isSorted[K comparable, V any](h *heap[K, V]) bool {
 
 func TestHeap_Sort(t *testing.T) {
 	var as = assert.New(t)
-	var h = newHeap[string, int](0)
+	var q = newDeque[string, int](0)
+	var h = newHeap[string, int](q, 0)
 	for i := 0; i < 1000; i++ {
 		num := rand.Int63n(1000)
-		h.Push(&Element[string, int]{ExpireAt: num})
+		ele := q.PushBack()
+		ele.ExpireAt = num
+		h.Push(ele)
 	}
 
-	as.LessOrEqual(h.Front().ExpireAt, h.Data[1].ExpireAt)
-	as.LessOrEqual(h.Front().ExpireAt, h.Data[2].ExpireAt)
-	as.LessOrEqual(h.Front().ExpireAt, h.Data[3].ExpireAt)
-	as.LessOrEqual(h.Front().ExpireAt, h.Data[4].ExpireAt)
+	as.LessOrEqual(h.Front().ExpireAt, h.List.Get(h.Data[1]).ExpireAt)
+	as.LessOrEqual(h.Front().ExpireAt, h.List.Get(h.Data[2]).ExpireAt)
+	as.LessOrEqual(h.Front().ExpireAt, h.List.Get(h.Data[3]).ExpireAt)
+	as.LessOrEqual(h.Front().ExpireAt, h.List.Get(h.Data[4]).ExpireAt)
 	as.True(isSorted(h))
-	as.Nil(h.Pop())
+	as.Zero(h.Pop())
 }
 
 func TestHeap_Delete(t *testing.T) {
 	var as = assert.New(t)
-	var h = newHeap[string, int](0)
-	h.Push(&Element[string, int]{ExpireAt: 1})
-	h.Push(&Element[string, int]{ExpireAt: 2})
-	h.Push(&Element[string, int]{ExpireAt: 3})
-	h.Push(&Element[string, int]{ExpireAt: 4})
-	h.Push(&Element[string, int]{ExpireAt: 5})
-	h.Push(&Element[string, int]{ExpireAt: 6})
-	h.Push(&Element[string, int]{ExpireAt: 7})
-	h.Push(&Element[string, int]{ExpireAt: 8})
-	h.Push(&Element[string, int]{ExpireAt: 9})
-	h.Push(&Element[string, int]{ExpireAt: 10})
+	var q = newDeque[string, int](0)
+	var h = newHeap[string, int](q, 0)
+	var push = func(exp int64) {
+		ele := q.PushBack()
+		ele.ExpireAt = exp
+		h.Push(ele)
+	}
+	push(1)
+	push(2)
+	push(3)
+	push(4)
+	push(5)
+	push(6)
+	push(7)
+	push(8)
+	push(9)
+	push(10)
 	h.Delete(3)
 	h.Delete(5)
 
 	var list []int64
 	for _, item := range h.Data {
-		list = append(list, item.ExpireAt)
+		ele := h.List.Get(item)
+		list = append(list, ele.ExpireAt)
 	}
 	as.ElementsMatch(list, []int64{1, 2, 3, 8, 5, 9, 7, 10})
 }
