@@ -33,7 +33,7 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`.
 - Cache Eviction Policy: LRU
 - Persistent: None
 - Locking Mechanism: Slicing + Mutual Exclusion Locking
-- Use `dao/deque` to reduce the number of linkedlist pointers; use integers as Map KVs
+- HashMap, Heap and LinkedList (excluding user KVs) implemented in pointerless technology
 
 ### Advantage
 
