@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lxzan/dao/deque"
-
 	"github.com/lxzan/memorycache/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -185,7 +183,8 @@ func TestMemoryCache_Set(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -194,7 +193,8 @@ func TestMemoryCache_Set(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -310,7 +310,8 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -319,7 +320,8 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -401,7 +403,8 @@ func TestMemoryCache_Delete(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for _, item := range b.Heap.Data {
-				list1 = append(list1, int(item.ExpireAt))
+				ele := b.List.Get(item)
+				list1 = append(list1, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -410,7 +413,8 @@ func TestMemoryCache_Delete(t *testing.T) {
 		for _, b := range mc.storage {
 			b.Lock()
 			for b.Heap.Len() > 0 {
-				list2 = append(list2, int(b.Heap.Pop().ExpireAt))
+				ele := b.List.Get(b.Heap.Pop())
+				list2 = append(list2, int(ele.ExpireAt))
 			}
 			b.Unlock()
 		}
@@ -696,74 +700,16 @@ func TestMemoryCache_Random(t *testing.T) {
 		for _, b := range mc.storage {
 			assert.Equal(t, b.Map.Count(), b.Heap.Len())
 			assert.Equal(t, b.Heap.Len(), b.List.Len())
-			b.List.Range(func(ele *deque.Element[*Element[string, int]]) bool {
-				var v = ele.Value()
+			b.List.Range(func(ele *Element[string, int]) bool {
+				var v = ele
 				var v1 = b.Heap.Data[v.index]
-				assert.Equal(t, v.Key, v1.Key)
-				assert.Equal(t, v.Value, v1.Value)
+				assert.Equal(t, v.addr, v1)
 
 				var v2, _ = b.Map.Get(v.hashcode)
 				assert.Equal(t, v.addr, v2)
 				return true
 			})
-			//b.Map.Iter(func(k string, v *Element[string, int]) (stop bool) {
-			//	var v1 = b.Heap.Data[v.index]
-			//	assert.Equal(t, v.Key, v1.Key)
-			//	assert.Equal(t, v.Value, v1.Value)
-			//
-			//	var v2 = b.List.Get(v.addr).Value()
-			//	assert.Equal(t, v.Key, v2.Key)
-			//	assert.Equal(t, v.Value, v2.Value)
-			//	return true
-			//})
 			assert.True(t, isSorted(b.Heap))
 		}
 	})
-
-	//t.Run("without lru", func(t *testing.T) {
-	//	const count = 10000
-	//	var mc = New[string, int](
-	//		WithLRU(false),
-	//		WithBucketNum(16),
-	//		WithBucketSize(100, 625),
-	//	)
-	//	for i := 0; i < count; i++ {
-	//		var key = string(utils.AlphabetNumeric.Generate(3))
-	//		var val = utils.AlphabetNumeric.Intn(count)
-	//		mc.Set(key, val, time.Hour)
-	//	}
-	//
-	//	for i := 0; i < count; i++ {
-	//		var key = string(utils.AlphabetNumeric.Generate(3))
-	//		var val = utils.AlphabetNumeric.Intn(count)
-	//		switch utils.AlphabetNumeric.Intn(8) {
-	//		case 0, 1:
-	//			mc.Set(key, val, time.Hour)
-	//		case 2:
-	//			mc.SetWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
-	//		case 3:
-	//			mc.Get(key)
-	//		case 4:
-	//			mc.GetWithTTL(key, time.Hour)
-	//		case 5:
-	//			mc.GetOrCreate(key, val, time.Hour)
-	//		case 6:
-	//			mc.GetOrCreateWithCallback(key, val, time.Hour, func(entry *Element[string, int], reason Reason) {})
-	//		case 7:
-	//			mc.Delete(key)
-	//		}
-	//	}
-	//
-	//	for _, b := range mc.storage {
-	//		assert.Equal(t, b.Map.Count(), b.Heap.Len())
-	//		assert.Equal(t, b.List.Len(), 0)
-	//		b.Map.Iter(func(k string, v *Element[string, int]) (stop bool) {
-	//			var v1 = b.Heap.Data[v.index]
-	//			assert.Equal(t, v.Key, v1.Key)
-	//			assert.Equal(t, v.Value, v1.Value)
-	//			return true
-	//		})
-	//		assert.True(t, isSorted(b.Heap))
-	//	}
-	//})
 }

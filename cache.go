@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/dolthub/maphash"
-	"github.com/lxzan/dao/deque"
 	"github.com/lxzan/memorycache/internal/containers"
 	"github.com/lxzan/memorycache/internal/utils"
 )
@@ -143,7 +142,7 @@ func (c *MemoryCache[K, V]) fetch(b bucketWrapper[K, V], key K) (ele *Element[K,
 		return nil, false, false
 	}
 
-	ele = b.List.Get(addr).Value()
+	ele = b.List.Get(addr)
 	if ele.expired(c.getTimestamp()) {
 		b.Delete(ele, ReasonExpired)
 		return nil, false, false
@@ -177,7 +176,8 @@ func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, c
 		return true
 	}
 
-	ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb, hashcode: b.hashcode}
+	ele = b.GetElement()
+	ele.Key, ele.Value, ele.ExpireAt, ele.hashcode, ele.cb = key, value, expireAt, b.hashcode, cb
 	b.Insert(ele)
 	return false
 }
@@ -238,7 +238,8 @@ func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Dur
 		return ele.Value, true
 	}
 
-	ele = &Element[K, V]{Key: key, Value: value, ExpireAt: expireAt, cb: cb, hashcode: b.hashcode}
+	ele = b.GetElement()
+	ele.Key, ele.Value, ele.ExpireAt, ele.hashcode, ele.cb = key, value, expireAt, b.hashcode, cb
 	b.Insert(ele)
 	return value, false
 }
@@ -265,8 +266,8 @@ func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
 		b.Lock()
-		for _, ele := range b.Heap.Data {
-			if ele.expired(now) {
+		for _, ele := range b.List.elements {
+			if ele.addr == null || ele.expired(now) {
 				continue
 			}
 			if !f(ele.Key, ele.Value) {
@@ -294,9 +295,9 @@ type (
 	bucket[K comparable, V any] struct {
 		sync.Mutex
 		conf *config
-		Map  containers.Map[uint64, deque.Pointer]
+		Map  containers.Map[uint64, pointer]
 		Heap *heap[K, V]
-		List *deque.Deque[*Element[K, V]]
+		List *deque[K, V]
 	}
 
 	bucketWrapper[K comparable, V any] struct {
@@ -306,9 +307,9 @@ type (
 )
 
 func (c *bucket[K, V]) init() *bucket[K, V] {
-	c.Map = containers.NewMap[uint64, deque.Pointer](c.conf.BucketSize, c.conf.SwissTable)
-	c.Heap = newHeap[K, V](c.conf.BucketSize)
-	c.List = deque.New[*Element[K, V]](c.conf.BucketSize)
+	c.Map = containers.NewMap[uint64, pointer](c.conf.BucketSize, c.conf.SwissTable)
+	c.List = newDeque[K, V](c.conf.BucketSize)
+	c.Heap = newHeap[K, V](c.List, c.conf.BucketSize)
 	return c
 }
 
@@ -326,10 +327,10 @@ func (c *bucket[K, V]) Check(now int64, num int) int {
 }
 
 func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
-	c.List.Remove(ele.addr)
 	c.Heap.Delete(ele.index)
 	c.Map.Delete(ele.hashcode)
 	ele.cb(ele, reason)
+	c.List.Remove(ele.addr) // 必须最后删除List, 因为会清空*Element[K, V]数据
 }
 
 func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
@@ -337,12 +338,14 @@ func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
 	c.List.MoveToBack(ele.addr)
 }
 
-func (c *bucket[K, V]) Insert(ele *Element[K, V]) {
+func (c *bucket[K, V]) GetElement() *Element[K, V] {
 	if c.List.Len() >= c.conf.BucketCap {
-		c.Delete(c.List.Front().Value(), ReasonEvicted)
+		c.Delete(c.List.Front(), ReasonEvicted)
 	}
+	return c.List.PushBack()
+}
 
-	ele.addr = c.List.PushBack(ele).Addr()
+func (c *bucket[K, V]) Insert(ele *Element[K, V]) {
 	c.Heap.Push(ele)
 	c.Map.Put(ele.hashcode, ele.addr)
 }

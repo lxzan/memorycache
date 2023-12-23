@@ -4,6 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/Yiling-J/theine-go"
 	"github.com/dgraph-io/ristretto"
 	"github.com/lxzan/memorycache"
@@ -196,4 +200,39 @@ func BenchmarkTheine_SetAndGet(b *testing.B) {
 			}
 		}
 	})
+}
+
+// 测试LRU算法实现的正确性
+func TestLRU_Impl(t *testing.T) {
+	var f = func() {
+		var count = 10000
+		var capacity = 5000
+		var mc = memorycache.New[string, int](
+			memorycache.WithBucketNum(1),
+			memorycache.WithBucketSize(capacity, capacity),
+		)
+		var cache, _ = lru.New[string, int](capacity)
+		for i := 0; i < count; i++ {
+			key := string(utils.AlphabetNumeric.Generate(16))
+			val := utils.AlphabetNumeric.Intn(capacity)
+			mc.Set(key, val, time.Hour)
+			cache.Add(key, val)
+		}
+
+		keys := cache.Keys()
+		assert.Equal(t, mc.Len(), capacity)
+		assert.Equal(t, mc.Len(), cache.Len())
+		assert.Equal(t, mc.Len(), len(keys))
+
+		for _, key := range keys {
+			v1, ok1 := mc.Get(key)
+			v2, _ := cache.Peek(key)
+			assert.True(t, ok1)
+			assert.Equal(t, v1, v2)
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		f()
+	}
 }

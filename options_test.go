@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/dolthub/swiss"
-	"github.com/lxzan/dao/deque"
 	"github.com/lxzan/memorycache/internal/containers"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -80,14 +78,14 @@ func TestWithSwissTable(t *testing.T) {
 		var mc = New[string, int](
 			WithSwissTable(true),
 		)
-		_, ok := mc.storage[0].Map.(*swiss.Map[uint64, deque.Pointer])
+		_, ok := mc.storage[0].Map.(*swiss.Map[uint64, pointer])
 		assert.True(t, ok)
 		assert.True(t, mc.conf.SwissTable)
 	})
 
 	t.Run("", func(t *testing.T) {
 		var mc = New[string, int]()
-		_, ok := mc.storage[0].Map.(containers.Map[uint64, deque.Pointer])
+		_, ok := mc.storage[0].Map.(containers.Map[uint64, pointer])
 		assert.True(t, ok)
 		assert.False(t, mc.conf.SwissTable)
 	})
