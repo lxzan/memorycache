@@ -70,9 +70,15 @@ import (
 
 func main() {
 	mc := memorycache.New[string, any](
-		memorycache.WithBucketNum(128),                          // Bucket number, recommended to be a prime number.
-		memorycache.WithBucketSize(1000, 10000),                 // Bucket size, initial size and maximum capacity.
-		memorycache.WithInterval(5*time.Second, 30*time.Second), // Active cycle cleanup interval and expiration time.
+		// Set the number of storage buckets, y=pow(2,x)
+		memorycache.WithBucketNum(128),
+
+		// Set bucket size, initial size and maximum capacity (single bucket)
+		memorycache.WithBucketSize(1000, 10000),
+
+		// Set the expiration time check period. 
+		// If the number of expired elements is small, take the maximum value, otherwise take the minimum value.
+		memorycache.WithInterval(5*time.Second, 30*time.Second),
 	)
 
 	mc.SetWithCallback("xxx", 1, time.Second, func(element *memorycache.Element[string, any], reason memorycache.Reason) {

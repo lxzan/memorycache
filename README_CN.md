@@ -56,15 +56,21 @@ package main
 
 import (
 	"fmt"
-	"github.com/lxzan/memorycache"
 	"time"
+
+	"github.com/lxzan/memorycache"
 )
 
 func main() {
 	mc := memorycache.New[string, any](
-		memorycache.WithBucketNum(128),                          // Bucket number, recommended to be a prime number.
-		memorycache.WithBucketSize(1000, 10000),                 // Bucket size, initial size and maximum capacity.
-		memorycache.WithInterval(5*time.Second, 30*time.Second), // Active cycle cleanup interval and expiration time.
+		// 设置存储桶数量, y=pow(2,x)
+		memorycache.WithBucketNum(128),
+
+		// 设置单个存储桶的初始化容量和最大容量
+		memorycache.WithBucketSize(1000, 10000),
+
+		// 设置过期时间检查周期. 如果过期元素较少, 取最大值, 反之取最小值.
+		memorycache.WithInterval(5*time.Second, 30*time.Second),
 	)
 
 	mc.SetWithCallback("xxx", 1, time.Second, func(element *memorycache.Element[string, any], reason memorycache.Reason) {

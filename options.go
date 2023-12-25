@@ -43,7 +43,9 @@ func WithBucketSize(size, cap int) Option {
 }
 
 // WithInterval 设置TTL检查周期
+// 设置过期时间检查周期. 如果过期元素较少, 取最大值, 反之取最小值.
 // Setting the TTL check period
+// If the number of expired elements is small, take the maximum value, otherwise take the minimum value.
 func WithInterval(min, max time.Duration) Option {
 	return func(c *config) {
 		c.MinInterval = min

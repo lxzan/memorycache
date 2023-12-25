@@ -66,9 +66,12 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 				}
 
 				// 删除数量超过阈值, 缩小时间间隔
-				if d1 := utils.SelectValue(sum > conf.BucketNum*conf.DeleteLimits*7/10, conf.MinInterval, conf.MaxInterval); d1 != d0 {
-					d0 = d1
-					ticker.Reset(d0)
+				if sum > 0 {
+					d1 := utils.SelectValue(sum > conf.BucketNum*conf.DeleteLimits*7/10, conf.MinInterval, conf.MaxInterval)
+					if d1 != d0 {
+						d0 = d1
+						ticker.Reset(d0)
+					}
 				}
 			}
 		}
@@ -260,8 +263,10 @@ func (c *MemoryCache[K, V]) Delete(key K) (exist bool) {
 	return false
 }
 
-// Range 遍历缓存. 注意: 不要在回调函数里面操作 MemoryCache[K, V] 实例, 可能会造成死锁.
-// Traverse the cache. Note: Do not manipulate MemoryCache[K, V] instances inside callback functions, as this may cause deadlocks.
+// Range 遍历缓存
+// 注意: 不要在回调函数里面操作 MemoryCache[K, V] 实例, 可能会造成死锁.
+// Traverse the cache.
+// Note: Do not manipulate MemoryCache[K, V] instances inside callback functions, as this may cause deadlocks.
 func (c *MemoryCache[K, V]) Range(f func(K, V) bool) {
 	var now = time.Now().UnixMilli()
 	for _, b := range c.storage {
