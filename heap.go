@@ -1,6 +1,6 @@
 package memorycache
 
-import "github.com/lxzan/dao/algorithm"
+import "github.com/lxzan/dao/algo"
 
 // newHeap 新建一个堆
 // Create a new heap
@@ -96,7 +96,7 @@ func (c *heap[K, V]) Down(i, n int) {
 		return
 	}
 
-	var end = algorithm.Min(base+4, n-1)
+	var end = algo.Min(base+4, n-1)
 	for j := base + 2; j <= end; j++ {
 		if c.Less(j, index) {
 			index = j
