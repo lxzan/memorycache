@@ -145,19 +145,17 @@ func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (exist bool) 
 	b.Lock()
 
 	var expireAt = c.getExp(exp)
+	var now = c.getTimestamp()
 	addr, ok := b.Map.Get(hashcode)
 	if ok {
 		ele := b.List.Get(addr)
-		if ele.expired(c.timestamp.Load()) {
+		if ele.expired(now) {
 			b.Delete(ele, ReasonExpired)
 		} else if key != ele.Key {
 			b.Delete(ele, ReasonEvicted)
 		} else {
 			ele.Value = value
-			if ele.ExpireAt != expireAt {
-				b.Heap.UpdateTTL(ele, expireAt)
-				b.List.MoveToBack(ele.addr)
-			}
+			b.UpdateTTL(ele, expireAt)
 			b.Unlock()
 			return true
 		}
@@ -180,19 +178,17 @@ func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, c
 	b.Lock()
 
 	var expireAt = c.getExp(exp)
+	var now = c.getTimestamp()
 	addr, ok := b.Map.Get(hashcode)
 	if ok {
 		ele := b.List.Get(addr)
-		if ele.expired(c.timestamp.Load()) {
+		if ele.expired(now) {
 			b.Delete(ele, ReasonExpired)
 		} else if key != ele.Key {
 			b.Delete(ele, ReasonEvicted)
 		} else {
 			ele.Value, ele.cb = value, cb
-			if ele.ExpireAt != expireAt {
-				b.Heap.UpdateTTL(ele, expireAt)
-				b.List.MoveToBack(ele.addr)
-			}
+			b.UpdateTTL(ele, expireAt)
 			b.Unlock()
 			return true
 		}
@@ -218,7 +214,8 @@ func (c *MemoryCache[K, V]) Get(key K) (v V, exist bool) {
 		return v, false
 	}
 	ele := b.List.Get(addr)
-	if ele.expired(c.timestamp.Load()) {
+	var now = c.getTimestamp()
+	if ele.expired(now) {
 		b.Delete(ele, ReasonExpired)
 		b.Unlock()
 		return v, false
@@ -264,7 +261,9 @@ func (c *MemoryCache[K, V]) GetTTL(key K) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	ele := b.List.Get(addr)
-	if ele.expired(c.getTimestamp()) {
+	var now = c.getTimestamp()
+	if ele.expired(now) {
+		b.Delete(ele, ReasonExpired)
 		b.Unlock()
 		return time.Time{}, false
 	}
@@ -272,11 +271,12 @@ func (c *MemoryCache[K, V]) GetTTL(key K) (time.Time, bool) {
 		b.Unlock()
 		return time.Time{}, false
 	}
+	var expireAt = ele.ExpireAt
 	b.Unlock()
-	if ele.ExpireAt == math.MaxInt64 {
+	if expireAt == math.MaxInt64 {
 		return time.Time{}, true
 	}
-	return time.UnixMilli(ele.ExpireAt), true
+	return time.UnixMilli(expireAt), true
 }
 
 // GetWithTTL 获取. 如果存在, 刷新过期时间.
@@ -292,7 +292,8 @@ func (c *MemoryCache[K, V]) GetWithTTL(key K, exp time.Duration) (v V, exist boo
 		return v, false
 	}
 	ele := b.List.Get(addr)
-	if ele.expired(c.timestamp.Load()) {
+	var now = c.getTimestamp()
+	if ele.expired(now) {
 		b.Delete(ele, ReasonExpired)
 		b.Unlock()
 		return v, false
@@ -302,11 +303,7 @@ func (c *MemoryCache[K, V]) GetWithTTL(key K, exp time.Duration) (v V, exist boo
 		return v, false
 	}
 
-	var expireAt = c.getExp(exp)
-	if ele.ExpireAt != expireAt {
-		b.Heap.UpdateTTL(ele, expireAt)
-		b.List.MoveToBack(ele.addr)
-	}
+	b.UpdateTTL(ele, c.getExp(exp))
 	b.Unlock()
 	return ele.Value, true
 }
@@ -324,7 +321,9 @@ func (c *MemoryCache[K, V]) UpdateTTL(key K, d time.Duration) bool {
 		return false
 	}
 	ele := b.List.Get(addr)
-	if ele.expired(c.timestamp.Load()) {
+	var now = c.getTimestamp()
+	if ele.expired(now) {
+		b.Delete(ele, ReasonExpired)
 		b.Unlock()
 		return false
 	}
@@ -332,11 +331,7 @@ func (c *MemoryCache[K, V]) UpdateTTL(key K, d time.Duration) bool {
 		b.Unlock()
 		return false
 	}
-	var expireAt = c.getExp(d)
-	if ele.ExpireAt != expireAt {
-		b.Heap.UpdateTTL(ele, expireAt)
-		b.List.MoveToBack(ele.addr)
-	}
+	b.UpdateTTL(ele, c.getExp(d))
 	b.Unlock()
 	return true
 }
@@ -357,18 +352,16 @@ func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Dur
 	b.Lock()
 
 	var expireAt = c.getExp(exp)
+	var now = c.getTimestamp()
 	addr, ok := b.Map.Get(hashcode)
 	if ok {
 		ele := b.List.Get(addr)
-		if ele.expired(c.timestamp.Load()) {
+		if ele.expired(now) {
 			b.Delete(ele, ReasonExpired)
 		} else if key != ele.Key {
 			b.Delete(ele, ReasonEvicted)
 		} else {
-			if ele.ExpireAt != expireAt {
-				b.Heap.UpdateTTL(ele, expireAt)
-				b.List.MoveToBack(ele.addr)
-			}
+			b.UpdateTTL(ele, expireAt)
 			b.Unlock()
 			return ele.Value, true
 		}
@@ -394,7 +387,8 @@ func (c *MemoryCache[K, V]) Delete(key K) (exist bool) {
 		return false
 	}
 	ele := b.List.Get(addr)
-	if ele.expired(c.timestamp.Load()) {
+	var now = c.getTimestamp()
+	if ele.expired(now) {
 		b.Delete(ele, ReasonExpired)
 		b.Unlock()
 		return false

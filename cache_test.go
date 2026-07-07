@@ -811,6 +811,21 @@ func TestGetTTL(t *testing.T) {
 		ttl, ok := mc.GetTTL("key1")
 		assert.False(t, ok)
 		assert.True(t, ttl.IsZero())
+		assert.Equal(t, 0, mc.Len())
+	})
+
+	t.Run("cached time disabled uses real time", func(t *testing.T) {
+		var mc = New[string, any](
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		mc.Set("key1", "value1", 50*time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
+
+		_, ok := mc.Get("key1")
+		assert.False(t, ok)
 	})
 }
 
