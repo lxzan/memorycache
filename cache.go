@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/dolthub/maphash"
+	"github.com/lxzan/concurrency/queues"
 	"github.com/lxzan/memorycache/internal/containers"
 	"github.com/lxzan/memorycache/internal/utils"
 )
 
 type MemoryCache[K comparable, V any] struct {
 	conf       *config
+	q          queues.Queue
 	storage    []*bucket[K, V]
 	hasher     utils.Hasher[K]
 	timestamp  atomic.Int64
@@ -40,12 +42,13 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 		bucketMask: uint64(conf.BucketNum - 1),
 		wg:         sync.WaitGroup{},
 		once:       sync.Once{},
+		q:          queues.New(queues.WithSharding(16), queues.WithConcurrency(1), queues.WithRecovery()),
 	}
 	mc.ctx, mc.cancel = context.WithCancel(context.Background())
 	mc.timestamp.Store(time.Now().UnixMilli())
 
 	for i := range mc.storage {
-		b := (&bucket[K, V]{conf: conf}).init()
+		b := (&bucket[K, V]{conf: conf, q: mc.q}).init()
 		mc.storage[i] = b
 	}
 
@@ -98,15 +101,15 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 	return mc
 }
 
-// Clear 清空缓存. 对存活非过期元素触发 ReasonCleared 回调.
-// Clear caches. Triggers ReasonCleared callback for alive non-expired elements.
+// Clear 清空缓存. 对存活非过期元素异步触发 ReasonCleared 回调.
+// Clear caches. Asynchronously triggers ReasonCleared callback for alive non-expired elements.
 func (c *MemoryCache[K, V]) Clear() {
 	var now = c.getTimestamp()
 	for _, b := range c.storage {
 		b.Lock()
 		b.List.Range(func(ele *Element[K, V]) bool {
-			if !ele.expired(now) && ele.cb != nil {
-				ele.cb(ele, ReasonCleared)
+			if !ele.expired(now) {
+				b.invokeCallback(ele, ReasonCleared)
 			}
 			return true
 		})
@@ -119,6 +122,7 @@ func (c *MemoryCache[K, V]) Stop() {
 	c.once.Do(func() {
 		c.cancel()
 		c.wg.Wait()
+		_ = c.q.Stop(context.Background())
 	})
 }
 
@@ -168,10 +172,10 @@ func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (exist bool) 
 	return false
 }
 
-// SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会触发回调.
-// 注意: 不要在回调函数里面操作 MemoryCache 实例, 可能会造成死锁.
-// Set the key value, expiration time and callback function. The callback is triggered by both capacity overflow and expiration.
-// Note: Don't manipulate MemoryCache instances in callback functions, as this may cause deadlocks.
+// SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会异步触发回调.
+// 回调在独立任务队列中执行, 收到的 Element 为快照而非缓存内活跃引用.
+// Set the key value, expiration time and callback function. Callbacks are dispatched asynchronously on capacity overflow or expiration.
+// The Element passed to the callback is a snapshot, not a live cache reference.
 func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (exist bool) {
 	hashcode := c.hasher.Hash(key)
 	b := c.storage[hashcode&c.bucketMask]
@@ -343,9 +347,9 @@ func (c *MemoryCache[K, V]) GetOrCreate(key K, value V, exp time.Duration) (v V,
 }
 
 // GetOrCreateWithCallback 如果存在, 返回已有值(忽略 value 和 cb 参数)并刷新过期时间. 如果不存在, 创建一个新的.
-// 注意: 不要在回调函数里面操作 MemoryCache 实例, 可能会造成死锁.
+// 回调异步执行, Element 为快照.
 // Get or create a value with CallbackFunc. If it exists, returns the existing value (ignoring the value and cb parameters) and refreshes the expiration time. If it does not exist, creates a new one.
-// Note: Don't manipulate MemoryCache instances in callback functions, as this may cause deadlocks.
+// Callbacks are dispatched asynchronously; the Element is a snapshot.
 func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (v V, exist bool) {
 	hashcode := c.hasher.Hash(key)
 	b := c.storage[hashcode&c.bucketMask]
@@ -446,6 +450,7 @@ func (c *MemoryCache[K, V]) Len() int {
 type bucket[K comparable, V any] struct {
 	sync.Mutex
 	conf *config
+	q    queues.Queue
 	Map  containers.Map[uint64, pointer]
 	Heap *heap[K, V]
 	List *deque[K, V]
@@ -475,12 +480,20 @@ func (c *bucket[K, V]) Check(now int64, num int) int {
 	return sum
 }
 
+func (c *bucket[K, V]) invokeCallback(ele *Element[K, V], reason Reason) {
+	if ele.cb == nil {
+		return
+	}
+	payload := callbackPayload[K, V]{ele: *ele, reason: reason, cb: ele.cb}
+	c.q.Push(func() {
+		payload.cb(&payload.ele, payload.reason)
+	}, int64(ele.hashcode))
+}
+
 func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
 	c.Heap.Delete(ele.index)
 	c.Map.Delete(ele.hashcode)
-	if ele.cb != nil {
-		ele.cb(ele, reason)
-	}
+	c.invokeCallback(ele, reason)
 	c.List.Remove(ele.addr) // 必须最后删除List, 因为会清空*Element[K, V]数据
 }
 

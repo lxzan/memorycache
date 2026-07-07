@@ -21,6 +21,21 @@ func getKeys[K comparable, V any](db *MemoryCache[K, V]) []K {
 	return keys
 }
 
+func waitCallbacks[K comparable, V any](t *testing.T, mc *MemoryCache[K, V]) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if mc.q.Len() == 0 {
+			time.Sleep(20 * time.Millisecond)
+			if mc.q.Len() == 0 {
+				return
+			}
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("callback queue not drained")
+}
+
 func TestMemoryCache(t *testing.T) {
 	var as = assert.New(t)
 
@@ -456,6 +471,51 @@ func TestMaxCap(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryCache_AsyncCallback(t *testing.T) {
+	t.Run("delete returns before callback", func(t *testing.T) {
+		var mc = New[string, any]()
+		defer mc.Stop()
+
+		var ch = make(chan Reason, 1)
+		mc.SetWithCallback("key", 1, -1, func(ele *Element[string, any], reason Reason) {
+			ch <- reason
+		})
+
+		mc.Delete("key")
+		select {
+		case <-ch:
+			t.Fatal("callback should not run synchronously")
+		default:
+		}
+
+		waitCallbacks(t, mc)
+		assert.Equal(t, ReasonDeleted, <-ch)
+	})
+
+	t.Run("callback receives snapshot", func(t *testing.T) {
+		var mc = New[string, any](WithBucketNum(1))
+		defer mc.Stop()
+
+		var gotKey string
+		var wg sync.WaitGroup
+		wg.Add(1)
+		mc.SetWithCallback("key", "v1", -1, func(ele *Element[string, any], reason Reason) {
+			gotKey = ele.Key
+			wg.Done()
+		})
+
+		mc.Delete("key")
+		wg.Wait()
+		assert.Equal(t, "key", gotKey)
+
+		// 快照与缓存隔离: 删除后重新写入同 key 不影响已派发的回调数据
+		mc.Set("key", "v2", -1)
+		v, ok := mc.Get("key")
+		assert.True(t, ok)
+		assert.Equal(t, "v2", v)
+	})
+}
+
 func TestMemoryCache_SetPreservesCallback(t *testing.T) {
 	var as = assert.New(t)
 	var mc = New[string, any](
@@ -477,6 +537,7 @@ func TestMemoryCache_SetPreservesCallback(t *testing.T) {
 
 	// 通过 Delete 触发回调, 验证回调仍有效
 	mc.Delete("key1")
+	waitCallbacks(t, mc)
 	as.True(callbackCalled)
 }
 
@@ -907,6 +968,7 @@ func TestClearWithCallback(t *testing.T) {
 		})
 
 		mc.Clear()
+		waitCallbacks(t, mc)
 
 		mu.Lock()
 		assert.ElementsMatch(t, []string{"key1", "key2"}, clearedKeys)
@@ -941,6 +1003,7 @@ func TestClearWithCallback(t *testing.T) {
 
 		time.Sleep(50 * time.Millisecond)
 		mc.Clear()
+		waitCallbacks(t, mc)
 
 		mu.Lock()
 		assert.Equal(t, 1, clearedCount)
