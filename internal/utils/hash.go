@@ -10,24 +10,24 @@ const (
 
 func Fnv64(s string) uint64 {
 	var hash uint64 = offset64
-	for _, c := range s {
+	for i := 0; i < len(s); i++ {
 		hash *= prime64
-		hash ^= uint64(c)
+		hash ^= uint64(s[i])
 	}
 	return hash
 }
 
 func Fnv32(s string) uint32 {
 	var hash uint32 = offset32
-	for _, c := range s {
+	for i := 0; i < len(s); i++ {
 		hash *= prime32
-		hash ^= uint32(c)
+		hash ^= uint32(s[i])
 	}
 	return hash
 }
 
 type Hasher[K comparable] interface {
-	Hash(K) uint64
+	Hash(key K) uint64
 }
 
 // Fnv32Hasher 用于测试哈希冲突的数据集

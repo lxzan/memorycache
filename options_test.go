@@ -85,7 +85,7 @@ func TestWithSwissTable(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		var mc = New[string, int]()
-		_, ok := mc.storage[0].Map.(containers.Map[uint64, pointer])
+		_, ok := mc.storage[0].Map.(containers.HashMap[uint64, pointer])
 		assert.True(t, ok)
 		assert.False(t, mc.conf.SwissTable)
 	})

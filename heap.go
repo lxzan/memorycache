@@ -1,7 +1,5 @@
 package memorycache
 
-import "github.com/lxzan/dao/algo"
-
 // newHeap 新建一个堆
 // Create a new heap
 func newHeap[K comparable, V any](q *deque[K, V], cap int) *heap[K, V] {
@@ -40,6 +38,17 @@ func (c *heap[K, V]) Swap(i, j int) {
 	c.Data[i], c.Data[j] = c.Data[j], c.Data[i]
 }
 
+func (c *heap[K, V]) lessByIndex(i, j int) bool {
+	return c.List.elements[c.Data[i]].ExpireAt < c.List.elements[c.Data[j]].ExpireAt
+}
+
+func (c *heap[K, V]) swapDirect(i, j int) {
+	x := &c.List.elements[c.Data[i]]
+	y := &c.List.elements[c.Data[j]]
+	x.index, y.index = y.index, x.index
+	c.Data[i], c.Data[j] = c.Data[j], c.Data[i]
+}
+
 func (c *heap[K, V]) Push(ele *Element[K, V]) {
 	ele.index = c.Len()
 	c.Data = append(c.Data, ele.addr)
@@ -47,10 +56,13 @@ func (c *heap[K, V]) Push(ele *Element[K, V]) {
 }
 
 func (c *heap[K, V]) Up(i int) {
-	var j = (i - 1) >> 2
-	if i >= 1 && c.Less(i, j) {
-		c.Swap(i, j)
-		c.Up(j)
+	for i >= 1 {
+		j := (i - 1) >> 2
+		if !c.lessByIndex(i, j) {
+			break
+		}
+		c.swapDirect(i, j)
+		i = j
 	}
 }
 
@@ -77,7 +89,7 @@ func (c *heap[K, V]) Delete(i int) {
 	}
 
 	var n = c.Len()
-	var down = c.Less(i, n-1)
+	var down = c.lessByIndex(i, n-1)
 	c.Swap(i, n-1)
 	c.Data = c.Data[:n-1]
 	if i < n-1 {
@@ -90,27 +102,38 @@ func (c *heap[K, V]) Delete(i int) {
 }
 
 func (c *heap[K, V]) Down(i, n int) {
-	var base = i << 2
-	var index = base + 1
-	if index >= n {
-		return
-	}
-
-	var end = algo.Min(base+4, n-1)
-	for j := base + 2; j <= end; j++ {
-		if c.Less(j, index) {
-			index = j
+	for {
+		base := i << 2
+		index := base + 1
+		if index >= n {
+			return
 		}
-	}
-
-	if c.Less(index, i) {
-		c.Swap(i, index)
-		c.Down(index, n)
+		end := base + 4
+		if end >= n {
+			end = n - 1
+		}
+		for j := base + 2; j <= end; j++ {
+			if c.lessByIndex(j, index) {
+				index = j
+			}
+		}
+		if !c.lessByIndex(index, i) {
+			return
+		}
+		c.swapDirect(i, index)
+		i = index
 	}
 }
 
 // Front 访问堆顶元素
 // Accessing the top Element of the heap
 func (c *heap[K, V]) Front() *Element[K, V] {
-	return c.List.Get(c.Data[0])
+	if len(c.Data) == 0 {
+		return nil
+	}
+	addr := c.Data[0]
+	if int(addr) >= len(c.List.elements) {
+		return nil
+	}
+	return c.List.Get(addr)
 }

@@ -95,6 +95,10 @@ func withInitialize() Option {
 		if c.BucketCap <= 0 {
 			c.BucketCap = defaultBucketCap
 		}
+
+		if c.MinInterval > c.MaxInterval {
+			c.MinInterval, c.MaxInterval = c.MaxInterval, c.MinInterval
+		}
 	}
 }
 

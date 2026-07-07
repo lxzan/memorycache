@@ -18,7 +18,7 @@ func Uniq[T comparable](arr []T) []T {
 	for _, item := range arr {
 		m[item] = struct{}{}
 	}
-	for k, _ := range m {
+	for k := range m {
 		list = append(list, k)
 	}
 	return list

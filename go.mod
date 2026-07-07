@@ -1,6 +1,6 @@
 module github.com/lxzan/memorycache
 
-go 1.19
+go 1.21
 
 require (
 	github.com/dolthub/maphash v0.1.0

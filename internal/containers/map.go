@@ -4,8 +4,8 @@ import "github.com/dolthub/swiss"
 
 type Map[K comparable, V any] interface {
 	Count() int
-	Get(K) (V, bool)
-	Put(k K, v V)
+	Get(key K) (V, bool)
+	Put(key K, value V)
 	Delete(key K) bool
 	Iter(f func(K, V) bool)
 }

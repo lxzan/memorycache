@@ -7,6 +7,7 @@ const (
 	ReasonExpired = Reason(0) // 过期
 	ReasonEvicted = Reason(1) // 被驱逐
 	ReasonDeleted = Reason(2) // 被删除
+	ReasonCleared = Reason(3) // 被清空
 )
 
 type CallbackFunc[T any] func(element T, reason Reason)

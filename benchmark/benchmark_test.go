@@ -88,6 +88,40 @@ func BenchmarkMemoryCache_SetAndGet(b *testing.B) {
 	})
 }
 
+func BenchmarkMemoryCache_Delete(b *testing.B) {
+	var mc = memorycache.New[string, int](options...)
+	for i := 0; i < benchcount; i++ {
+		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var i = 0
+		for pb.Next() {
+			index := getIndex(i)
+			i++
+			mc.Delete(benchkeys[index])
+		}
+	})
+}
+
+func BenchmarkMemoryCache_UpdateTTL(b *testing.B) {
+	var mc = memorycache.New[string, int](options...)
+	for i := 0; i < benchcount; i++ {
+		mc.Set(benchkeys[i%benchcount], 1, time.Hour)
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var i = 0
+		for pb.Next() {
+			index := getIndex(i)
+			i++
+			mc.UpdateTTL(benchkeys[index], time.Hour)
+		}
+	})
+}
+
 func BenchmarkRistretto_Set(b *testing.B) {
 	var mc, _ = ristretto.NewCache(&ristretto.Config{
 		NumCounters: capacity * sharding * 10, // number of keys to track frequency of (10M).
@@ -209,6 +243,7 @@ func TestLRU_Impl(t *testing.T) {
 			memorycache.WithBucketNum(1),
 			memorycache.WithBucketSize(capacity, capacity),
 		)
+		defer mc.Stop()
 		var cache, _ = lru.New[string, int](capacity)
 		for i := 0; i < count; i++ {
 			key := string(utils.AlphabetNumeric.Generate(16))

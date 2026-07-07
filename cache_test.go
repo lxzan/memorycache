@@ -30,6 +30,7 @@ func TestMemoryCache(t *testing.T) {
 			WithBucketNum(1),
 			WithCachedTime(false),
 		)
+		defer db.Stop()
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 300*time.Millisecond)
 		db.Set("c", 1, 500*time.Millisecond)
@@ -47,6 +48,7 @@ func TestMemoryCache(t *testing.T) {
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
 			WithCachedTime(false),
 		)
+		defer db.Stop()
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 200*time.Millisecond)
 		db.Set("c", 1, 500*time.Millisecond)
@@ -64,6 +66,7 @@ func TestMemoryCache(t *testing.T) {
 			WithInterval(10*time.Millisecond, 10*time.Millisecond),
 			WithCachedTime(false),
 		)
+		defer db.Stop()
 		db.Set("a", 1, 100*time.Millisecond)
 		db.Set("b", 1, 200*time.Millisecond)
 		db.Set("c", 1, 400*time.Millisecond)
@@ -82,6 +85,7 @@ func TestMemoryCache(t *testing.T) {
 			WithBucketNum(1),
 			WithCachedTime(false),
 		)
+		defer mc.Stop()
 		var m1 = make(map[string]int)
 		var m2 = make(map[string]int64)
 		for i := 0; i < count; i++ {
@@ -125,6 +129,7 @@ func TestMemoryCache(t *testing.T) {
 			WithInterval(50*time.Millisecond, 100*time.Millisecond),
 			WithCachedTime(false),
 		)
+		defer mc.Stop()
 		mc.Set("a", 1, 150*time.Millisecond)
 		mc.Set("b", 1, 150*time.Millisecond)
 		mc.Set("c", 1, 150*time.Millisecond)
@@ -137,6 +142,7 @@ func TestMemoryCache_Set(t *testing.T) {
 		var list []string
 		var count = 10000
 		var mc = New[string, any](WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		defer mc.Stop()
 		mc.Clear()
 		for i := 0; i < count; i++ {
 			key := string(utils.AlphabetNumeric.Generate(8))
@@ -162,6 +168,7 @@ func TestMemoryCache_Set(t *testing.T) {
 			WithBucketNum(1),
 			WithBucketSize(0, 2),
 		)
+		defer mc.Stop()
 		mc.Set("ming", 1, 3*time.Hour)
 		mc.Set("hong", 1, 1*time.Hour)
 		mc.Set("feng", 1, 2*time.Hour)
@@ -171,6 +178,7 @@ func TestMemoryCache_Set(t *testing.T) {
 
 	t.Run("update ttl", func(t *testing.T) {
 		var mc = New[string, any](WithBucketNum(1))
+		defer mc.Stop()
 		var count = 1000
 		for i := 0; i < 10*count; i++ {
 			key := strconv.Itoa(utils.Numeric.Intn(count))
@@ -212,6 +220,7 @@ func TestMemoryCache_Get(t *testing.T) {
 		var list1 []string
 		var count = 10000
 		var mc = New[string, any](WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		defer mc.Stop()
 		for i := 0; i < count; i++ {
 			key := string(utils.AlphabetNumeric.Generate(8))
 			exp := rand.Intn(1000)
@@ -244,6 +253,7 @@ func TestMemoryCache_Get(t *testing.T) {
 		var mc = New[string, any](
 			WithInterval(10*time.Second, 10*time.Second),
 		)
+		defer mc.Stop()
 
 		var wg = &sync.WaitGroup{}
 		wg.Add(1)
@@ -267,6 +277,7 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 		var list []string
 		var count = 10000
 		var mc = New[string, any](WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		defer mc.Stop()
 		for i := 0; i < count; i++ {
 			key := string(utils.AlphabetNumeric.Generate(8))
 			exp := rand.Intn(1000) + 200
@@ -292,6 +303,7 @@ func TestMemoryCache_GetWithTTL(t *testing.T) {
 
 	t.Run("update ttl", func(t *testing.T) {
 		var mc = New[string, any](WithBucketNum(1))
+		defer mc.Stop()
 		var count = 1000
 		for i := 0; i < count; i++ {
 			key := strconv.Itoa(utils.Numeric.Intn(count))
@@ -337,6 +349,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 	t.Run("1", func(t *testing.T) {
 		var count = 10000
 		var mc = New[string, any](WithInterval(100*time.Millisecond, 100*time.Millisecond))
+		defer mc.Stop()
 		for i := 0; i < count; i++ {
 			key := string(utils.AlphabetNumeric.Generate(8))
 			exp := rand.Intn(1000) + 200
@@ -357,36 +370,31 @@ func TestMemoryCache_Delete(t *testing.T) {
 
 	t.Run("2", func(t *testing.T) {
 		var mc = New[string, any]()
-		var wg = &sync.WaitGroup{}
-		wg.Add(1)
+		defer mc.Stop()
+		ch := make(chan Reason, 1)
 		mc.SetWithCallback("ming", 1, -1, func(ele *Element[string, any], reason Reason) {
-			assert.Equal(t, reason, ReasonDeleted)
-			wg.Done()
+			ch <- reason
 		})
-		mc.SetWithCallback("ting", 2, -1, func(ele *Element[string, any], reason Reason) {
-			wg.Done()
-		})
-		go mc.Delete("ming")
-		wg.Wait()
+		mc.SetWithCallback("ting", 2, -1, func(ele *Element[string, any], reason Reason) {})
+		mc.Delete("ming")
+		assert.Equal(t, ReasonDeleted, <-ch)
 	})
 
 	t.Run("3", func(t *testing.T) {
 		var mc = New[string, any]()
-		var wg = &sync.WaitGroup{}
-		wg.Add(1)
-		mc.GetOrCreateWithCallback("ming", 1, -1, func(ele *Element[string, any], reason Reason) {
-			assert.Equal(t, reason, ReasonDeleted)
-			wg.Done()
-		})
+		defer mc.Stop()
+		ch := make(chan Reason, 1)
+		mc.GetOrCreateWithCallback("ming", 1, -1, func(ele *Element[string, any], reason Reason) {})
 		mc.GetOrCreateWithCallback("ting", 2, -1, func(ele *Element[string, any], reason Reason) {
-			wg.Done()
+			ch <- reason
 		})
-		go mc.Delete("ting")
-		wg.Wait()
+		mc.Delete("ting")
+		assert.Equal(t, ReasonDeleted, <-ch)
 	})
 
 	t.Run("batch delete", func(t *testing.T) {
 		var mc = New[string, any](WithBucketNum(1))
+		defer mc.Stop()
 		var count = 1000
 		for i := 0; i < count; i++ {
 			key := strconv.Itoa(utils.Numeric.Intn(count))
@@ -432,6 +440,7 @@ func TestMaxCap(t *testing.T) {
 		WithBucketSize(10, 100),
 		WithInterval(100*time.Millisecond, 100*time.Millisecond),
 	)
+	defer mc.Stop()
 
 	var wg = &sync.WaitGroup{}
 	wg.Add(900)
@@ -447,6 +456,30 @@ func TestMaxCap(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryCache_SetPreservesCallback(t *testing.T) {
+	var as = assert.New(t)
+	var mc = New[string, any](
+		WithBucketNum(1),
+		WithInterval(10*time.Second, 10*time.Second),
+		WithCachedTime(false),
+	)
+	defer mc.Stop()
+
+	// SetWithCallback 设置带回调的 key
+	var callbackCalled bool
+	mc.SetWithCallback("key1", "v1", time.Hour, func(ele *Element[string, any], reason Reason) {
+		callbackCalled = true
+	})
+
+	// Set 更新已有 key, 不应覆盖回调
+	exist := mc.Set("key1", "v2", time.Hour)
+	as.True(exist)
+
+	// 通过 Delete 触发回调, 验证回调仍有效
+	mc.Delete("key1")
+	as.True(callbackCalled)
+}
+
 func TestMemoryCache_SetWithCallback(t *testing.T) {
 	var as = assert.New(t)
 	var count = 1000
@@ -454,6 +487,7 @@ func TestMemoryCache_SetWithCallback(t *testing.T) {
 		WithBucketNum(16),
 		WithInterval(10*time.Millisecond, 100*time.Millisecond),
 	)
+	defer mc.Stop()
 	defer mc.Clear()
 
 	var wg = &sync.WaitGroup{}
@@ -477,6 +511,7 @@ func TestMemoryCache_GetOrCreate(t *testing.T) {
 		WithBucketNum(16),
 		WithInterval(10*time.Millisecond, 100*time.Millisecond),
 	)
+	defer mc.Stop()
 	defer mc.Clear()
 
 	for i := 0; i < count; i++ {
@@ -495,6 +530,7 @@ func TestMemoryCache_GetOrCreateWithCallback(t *testing.T) {
 			WithBucketNum(16),
 			WithInterval(10*time.Millisecond, 100*time.Millisecond),
 		)
+		defer mc.Stop()
 		defer mc.Clear()
 
 		var wg = &sync.WaitGroup{}
@@ -513,6 +549,7 @@ func TestMemoryCache_GetOrCreateWithCallback(t *testing.T) {
 
 	t.Run("exists", func(t *testing.T) {
 		var mc = New[string, any]()
+		defer mc.Stop()
 		mc.Set("ming", 1, -1)
 		v, exist := mc.GetOrCreateWithCallback("ming", 2, time.Second, func(ele *Element[string, any], reason Reason) {})
 		as.True(exist)
@@ -524,6 +561,7 @@ func TestMemoryCache_GetOrCreateWithCallback(t *testing.T) {
 			WithBucketNum(1),
 			WithBucketSize(0, 1),
 		)
+		defer mc.Stop()
 		mc.Set("ming", 1, -1)
 		v, exist := mc.GetOrCreateWithCallback("wang", 2, time.Second, func(ele *Element[string, any], reason Reason) {})
 		as.False(exist)
@@ -547,6 +585,7 @@ func TestMemoryCache_Stop(t *testing.T) {
 func TestMemoryCache_Range(t *testing.T) {
 	const count = 1000
 	var mc = New[string, int]()
+	t.Cleanup(func() { mc.Stop() })
 	for i := 0; i < count; i++ {
 		var key = string(utils.AlphabetNumeric.Generate(16))
 		mc.Set(key, 1, time.Hour)
@@ -572,7 +611,7 @@ func TestMemoryCache_Range(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		mc.Set("exp", 1, time.Millisecond)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1100 * time.Millisecond)
 		var keys []string
 		mc.Range(func(s string, i int) bool {
 			keys = append(keys, s)
@@ -587,6 +626,7 @@ func TestMemoryCache_LRU(t *testing.T) {
 	var mc = New[string, int](
 		WithBucketNum(1),
 	)
+	defer mc.Stop()
 	var indexes []int
 	for i := 0; i < count; i++ {
 		indexes = append(indexes, i)
@@ -615,6 +655,7 @@ func TestMemoryCache_LRU(t *testing.T) {
 func TestMemoryCache_Conflict(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		var mc = New[string, any]()
+		defer mc.Stop()
 		var wg = &sync.WaitGroup{}
 		wg.Add(1)
 		mc.hasher = new(utils.Fnv32Hasher)
@@ -638,6 +679,7 @@ func TestMemoryCache_Conflict(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		var mc = New[string, any]()
+		defer mc.Stop()
 		var wg = &sync.WaitGroup{}
 		wg.Add(1)
 		mc.hasher = new(utils.Fnv32Hasher)
@@ -670,6 +712,7 @@ func TestMemoryCache_Random(t *testing.T) {
 			WithBucketNum(16),
 			WithBucketSize(100, 625),
 		)
+		defer mc.Stop()
 		for i := 0; i < count; i++ {
 			var key = string(utils.AlphabetNumeric.Generate(3))
 			var val = utils.AlphabetNumeric.Intn(count)
@@ -711,5 +754,199 @@ func TestMemoryCache_Random(t *testing.T) {
 			})
 			assert.True(t, isSorted(b.Heap))
 		}
+	})
+}
+
+func TestGetTTL(t *testing.T) {
+	t.Run("key exists", func(t *testing.T) {
+		var mc = New[string, any](
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		var before = time.Now()
+		mc.Set("key1", "value1", 500*time.Millisecond)
+		var after = time.Now()
+
+		ttl, ok := mc.GetTTL("key1")
+		assert.True(t, ok)
+		assert.False(t, ttl.IsZero())
+
+		var expectedLow = before.Add(500 * time.Millisecond)
+		var expectedHigh = after.Add(500 * time.Millisecond)
+		assert.True(t, !ttl.Before(expectedLow.Add(-10*time.Millisecond)))
+		assert.True(t, !ttl.After(expectedHigh.Add(10*time.Millisecond)))
+	})
+
+	t.Run("key exists never expire", func(t *testing.T) {
+		var mc = New[string, any](WithCachedTime(false))
+		defer mc.Stop()
+
+		mc.Set("key1", "value1", -1)
+		ttl, ok := mc.GetTTL("key1")
+		assert.True(t, ok)
+		assert.True(t, ttl.IsZero())
+	})
+
+	t.Run("key not exists", func(t *testing.T) {
+		var mc = New[string, any](WithCachedTime(false))
+		defer mc.Stop()
+
+		ttl, ok := mc.GetTTL("nonexistent")
+		assert.False(t, ok)
+		assert.True(t, ttl.IsZero())
+	})
+
+	t.Run("key expired", func(t *testing.T) {
+		var mc = New[string, any](
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		mc.Set("key1", "value1", 10*time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
+
+		ttl, ok := mc.GetTTL("key1")
+		assert.False(t, ok)
+		assert.True(t, ttl.IsZero())
+	})
+}
+
+func TestUpdateTTL(t *testing.T) {
+	t.Run("update existing key", func(t *testing.T) {
+		var mc = New[string, any](
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		mc.Set("key1", "value1", 100*time.Millisecond)
+
+		var ok = mc.UpdateTTL("key1", 5*time.Second)
+		assert.True(t, ok)
+
+		ttl, ttlOk := mc.GetTTL("key1")
+		assert.True(t, ttlOk)
+
+		var expected = time.Now().Add(5 * time.Second)
+		var diff = ttl.Sub(expected)
+		if diff < 0 {
+			diff = -diff
+		}
+		assert.True(t, diff < 100*time.Millisecond)
+	})
+
+	t.Run("update non-existing key", func(t *testing.T) {
+		var mc = New[string, any](WithCachedTime(false))
+		defer mc.Stop()
+
+		var ok = mc.UpdateTTL("nonexistent", time.Second)
+		assert.False(t, ok)
+	})
+
+	t.Run("update to never expire", func(t *testing.T) {
+		var mc = New[string, any](
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		mc.Set("key1", "value1", 100*time.Millisecond)
+		var ok = mc.UpdateTTL("key1", -1)
+		assert.True(t, ok)
+
+		time.Sleep(200 * time.Millisecond)
+		v, getOk := mc.Get("key1")
+		assert.True(t, getOk)
+		assert.Equal(t, "value1", v)
+	})
+}
+
+func TestClearWithCallback(t *testing.T) {
+	t.Run("callback receives ReasonCleared for unexpired keys", func(t *testing.T) {
+		var mc = New[string, any](
+			WithBucketNum(1),
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		var clearedKeys []string
+		var mu sync.Mutex
+
+		mc.SetWithCallback("key1", "v1", time.Hour, func(ele *Element[string, any], reason Reason) {
+			if reason == ReasonCleared {
+				mu.Lock()
+				clearedKeys = append(clearedKeys, ele.Key)
+				mu.Unlock()
+			}
+		})
+		mc.SetWithCallback("key2", "v2", time.Hour, func(ele *Element[string, any], reason Reason) {
+			if reason == ReasonCleared {
+				mu.Lock()
+				clearedKeys = append(clearedKeys, ele.Key)
+				mu.Unlock()
+			}
+		})
+
+		mc.Clear()
+
+		mu.Lock()
+		assert.ElementsMatch(t, []string{"key1", "key2"}, clearedKeys)
+		mu.Unlock()
+	})
+
+	t.Run("expired keys do not trigger ReasonCleared", func(t *testing.T) {
+		var mc = New[string, any](
+			WithBucketNum(1),
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		var clearedCount int
+		var mu sync.Mutex
+
+		mc.SetWithCallback("expired", "v1", 10*time.Millisecond, func(ele *Element[string, any], reason Reason) {
+			if reason == ReasonCleared {
+				mu.Lock()
+				clearedCount++
+				mu.Unlock()
+			}
+		})
+		mc.SetWithCallback("valid", "v2", time.Hour, func(ele *Element[string, any], reason Reason) {
+			if reason == ReasonCleared {
+				mu.Lock()
+				clearedCount++
+				mu.Unlock()
+			}
+		})
+
+		time.Sleep(50 * time.Millisecond)
+		mc.Clear()
+
+		mu.Lock()
+		assert.Equal(t, 1, clearedCount)
+		mu.Unlock()
+	})
+
+	t.Run("clear then set works", func(t *testing.T) {
+		var mc = New[string, any](
+			WithBucketNum(1),
+			WithInterval(10*time.Second, 10*time.Second),
+			WithCachedTime(false),
+		)
+		defer mc.Stop()
+
+		mc.Set("key1", "v1", time.Hour)
+		mc.Clear()
+		assert.Equal(t, 0, mc.Len())
+
+		mc.Set("key2", "v2", time.Hour)
+		v, ok := mc.Get("key2")
+		assert.True(t, ok)
+		assert.Equal(t, "v2", v)
 	})
 }
