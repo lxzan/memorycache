@@ -42,29 +42,38 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`.
 
 - [x] **Set** : Set key-value pair with expiring time. If the key already exists, the value will be updated. Also the
       expiration time will be updated. `exp<=0` means never expire.
-- [x] **SetWithCallback** : Similar to `Set`, but with a callback function. Callbacks are dispatched asynchronously on capacity overflow, expiration, deletion, or clear.
+- [x] **SetWithCallback** : Similar to `Set`, but with a callback function. Triggered on capacity overflow, expiration, deletion, or clear.
 - [x] **Get** : Get value by key. If the key does not exist, the second return value will be false.
 - [x] **GetTTL** : Get the expiration time of the key.
 - [x] **GetWithTTL** : Get value by key. If the key exists, refreshes the expiration time.
 - [x] **UpdateTTL** : Update the expiration time of the key. `d<=0` means never expire.
 - [x] **Delete** : Delete key-value pair by key.
 - [x] **GetOrCreate** : Get value by key. If the key does not exist, the value will be created.
-- [x] **GetOrCreateWithCallback** : Get value by key. If the key does not exist, the value will be created. Callbacks are dispatched asynchronously.
-- [x] **Clear** : Clear all caches. Asynchronously triggers `ReasonCleared` callback for alive non-expired elements.
+- [x] **GetOrCreateWithCallback** : Get value by key. If the key does not exist, the value will be created with an optional callback.
+- [x] **Clear** : Clear all caches. Triggers `ReasonCleared` callback for alive non-expired elements.
 - [x] **Range** : Iterate all key-value pairs in the cache.
 - [x] **Len** : Get the current number of cached elements (may include expired but un-cleaned elements).
 - [x] **Stop** : Stop the background goroutines, drain pending callbacks, and release resources.
 
 ### Callbacks
 
-Callbacks registered via `SetWithCallback` or `GetOrCreateWithCallback` are dispatched **asynchronously** through an internal task queue (`queues.Queue`):
+Callbacks registered via `SetWithCallback` or `GetOrCreateWithCallback` are triggered on expiration, LRU eviction, explicit deletion, or `Clear`. Dispatch mode is controlled by `WithAsyncCallback` (default: **async**).
 
-- Triggered on expiration, LRU eviction, explicit deletion, or `Clear`.
-- Executed outside bucket locks, so they no longer block cache operations or risk deadlocks from reentrant cache access.
-- The `*Element` passed to the callback is a **snapshot** copied before the entry is recycled — do not treat it as a live cache reference.
-- Delivery is **best-effort and unordered** across keys; callbacks for the same hash shard are serialized (concurrency=1 per shard).
-- Panics in callbacks are recovered and logged (`WithRecovery`).
-- `Stop()` waits for pending callbacks to finish (up to 30s timeout) before returning.
+**Async mode** (`WithAsyncCallback(true)`, default):
+
+- Dispatched through an internal task queue (`queues.Queue`).
+- Executed outside bucket locks — does not block cache operations or risk deadlocks from reentrant cache access.
+- The `*Element` is a **snapshot** copied before the entry is recycled.
+- Delivery is **best-effort and unordered** across keys; same hash shard is serialized (concurrency=1 per shard).
+- Panics are recovered and logged (`WithRecovery`).
+- `Stop()` drains pending callbacks (up to 30s timeout).
+
+**Sync mode** (`WithAsyncCallback(false)`):
+
+- Callback runs inline under the bucket lock before the entry is recycled.
+- The `*Element` is a **live reference** valid only for the duration of the callback.
+- **Do not** call back into `MemoryCache` from the callback — this may deadlock.
+- No task queue is created; `Stop()` does not wait for callbacks.
 
 ### Options
 
@@ -75,6 +84,7 @@ Callbacks registered via `SetWithCallback` or `GetOrCreateWithCallback` are disp
 | `WithInterval(min, max)`    | 5s, 30s      | Adaptive TTL check period                              |
 | `WithDeleteLimits(num)`     | 1000         | Max keys deleted per TTL check per bucket              |
 | `WithCachedTime(enabled)`   | true         | Enable time caching for lower `time.Now()` overhead    |
+| `WithAsyncCallback(enabled)` | true        | Dispatch callbacks asynchronously via internal queue   |
 | `WithSwissTable(enabled)`   | false        | Use SwissTable instead of Go runtime map               |
 
 ### Example

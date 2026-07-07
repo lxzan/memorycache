@@ -23,6 +23,9 @@ func getKeys[K comparable, V any](db *MemoryCache[K, V]) []K {
 
 func waitCallbacks[K comparable, V any](t *testing.T, mc *MemoryCache[K, V]) {
 	t.Helper()
+	if !mc.conf.AsyncCallback || mc.q == nil {
+		return
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if mc.q.Len() == 0 {
@@ -472,7 +475,7 @@ func TestMaxCap(t *testing.T) {
 }
 
 func TestMemoryCache_AsyncCallback(t *testing.T) {
-	t.Run("delete returns before callback", func(t *testing.T) {
+	t.Run("async delete returns before callback", func(t *testing.T) {
 		var mc = New[string, any]()
 		defer mc.Stop()
 
@@ -513,6 +516,20 @@ func TestMemoryCache_AsyncCallback(t *testing.T) {
 		v, ok := mc.Get("key")
 		assert.True(t, ok)
 		assert.Equal(t, "v2", v)
+	})
+
+	t.Run("sync delete runs callback before return", func(t *testing.T) {
+		var mc = New[string, any](WithAsyncCallback(false))
+		defer mc.Stop()
+
+		var ch = make(chan Reason, 1)
+		mc.SetWithCallback("key", 1, -1, func(ele *Element[string, any], reason Reason) {
+			ch <- reason
+		})
+
+		mc.Delete("key")
+		assert.Equal(t, ReasonDeleted, <-ch)
+		assert.Nil(t, mc.q)
 	})
 }
 

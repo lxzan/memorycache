@@ -41,29 +41,38 @@
 ### 方法
 
 - [x] **Set** : 设置键值对及其过期时间。如果键已存在，将更新其值和过期时间。`exp<=0` 表示永不过期。
-- [x] **SetWithCallback** : 与 `Set` 类似，但可指定回调函数。容量溢出、过期、删除或清空时异步触发回调。
+- [x] **SetWithCallback** : 与 `Set` 类似，但可指定回调函数。在容量溢出、过期、删除或清空时触发。
 - [x] **Get** : 根据键获取值。如果键不存在，第二个返回值为 false。
 - [x] **GetTTL** : 获取键的过期时间。
 - [x] **GetWithTTL** : 根据键获取值。如果键存在，刷新其过期时间。
 - [x] **UpdateTTL** : 更新键的过期时间。`d<=0` 表示永不过期。
 - [x] **Delete** : 根据键删除键值对。
 - [x] **GetOrCreate** : 根据键获取值。如果键不存在，将创建该值。
-- [x] **GetOrCreateWithCallback** : 根据键获取值。如果键不存在，将创建该值，回调异步执行。
-- [x] **Clear** : 清空所有缓存。对存活非过期元素异步触发 `ReasonCleared` 回调。
+- [x] **GetOrCreateWithCallback** : 根据键获取值。如果键不存在，将创建该值，并可指定回调函数。
+- [x] **Clear** : 清空所有缓存。对存活非过期元素触发 `ReasonCleared` 回调。
 - [x] **Range** : 遍历缓存中的所有键值对。
 - [x] **Len** : 获取当前缓存元素数量（可能包含已过期但未清除的元素）。
 - [x] **Stop** : 停止后台协程，排空待执行回调后释放资源。
 
 ### 回调
 
-通过 `SetWithCallback` 或 `GetOrCreateWithCallback` 注册的回调经内部任务队列（`queues.Queue`）**异步**派发：
+通过 `SetWithCallback` 或 `GetOrCreateWithCallback` 注册的回调，在过期、LRU 驱逐、主动删除或 `Clear` 时触发。派发方式由 `WithAsyncCallback` 控制（默认**异步**）。
 
-- 在过期、LRU 驱逐、主动删除或 `Clear` 时触发。
-- 在桶锁外执行，不再阻塞缓存操作，也避免因重入访问缓存导致死锁。
-- 回调收到的 `*Element` 为条目回收前的**快照**，请勿当作缓存内的活跃引用使用。
-- 跨 key 的回调**不保证顺序**；同一哈希分片内串行执行（每分片 concurrency=1）。
+**异步模式**（`WithAsyncCallback(true)`，默认）：
+
+- 经内部任务队列（`queues.Queue`）派发。
+- 在桶锁外执行，不阻塞缓存操作，也避免因重入访问缓存导致死锁。
+- 回调收到的 `*Element` 为条目回收前的**快照**。
+- 跨 key **不保证顺序**；同一哈希分片内串行执行（每分片 concurrency=1）。
 - 回调 panic 会被恢复并记录日志（`WithRecovery`）。
-- `Stop()` 会等待待执行回调完成（最长 30s 超时）后再返回。
+- `Stop()` 会排空待执行回调（最长 30s 超时）。
+
+**同步模式**（`WithAsyncCallback(false)`）：
+
+- 在桶锁内、条目回收前同步执行回调。
+- 回调收到的 `*Element` 为**活跃引用**，仅在回调期间有效。
+- **请勿**在回调中操作 `MemoryCache`，否则可能死锁。
+- 不创建任务队列；`Stop()` 无需等待回调。
 
 ### 配置项
 
@@ -74,6 +83,7 @@
 | `WithInterval(min, max)`    | 5s, 30s      | 自适应 TTL 检查周期                      |
 | `WithDeleteLimits(num)`     | 1000         | 每次 TTL 检查单桶最大删除数              |
 | `WithCachedTime(enabled)`   | true         | 开启时间缓存，减少 `time.Now()` 调用开销 |
+| `WithAsyncCallback(enabled)` | true        | 经内部队列异步派发回调                   |
 | `WithSwissTable(enabled)`   | false        | 使用 SwissTable 替代 Go runtime map      |
 
 ### 使用

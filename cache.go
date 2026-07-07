@@ -29,7 +29,7 @@ type MemoryCache[K comparable, V any] struct {
 // New 创建缓存数据库实例
 // Creating a Cached Database Instance
 func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
-	var conf = &config{CachedTime: true}
+	var conf = &config{CachedTime: true, AsyncCallback: true}
 	options = append(options, withInitialize())
 	for _, fn := range options {
 		fn(conf)
@@ -42,7 +42,9 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 		bucketMask: uint64(conf.BucketNum - 1),
 		wg:         sync.WaitGroup{},
 		once:       sync.Once{},
-		q:          queues.New(queues.WithSharding(16), queues.WithConcurrency(1), queues.WithRecovery()),
+	}
+	if conf.AsyncCallback {
+		mc.q = queues.New(queues.WithSharding(16), queues.WithConcurrency(1), queues.WithRecovery())
 	}
 	mc.ctx, mc.cancel = context.WithCancel(context.Background())
 	mc.timestamp.Store(time.Now().UnixMilli())
@@ -101,8 +103,8 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 	return mc
 }
 
-// Clear 清空缓存. 对存活非过期元素异步触发 ReasonCleared 回调.
-// Clear caches. Asynchronously triggers ReasonCleared callback for alive non-expired elements.
+// Clear 清空缓存. 对存活非过期元素触发 ReasonCleared 回调.
+// Clear caches. Triggers ReasonCleared callback for alive non-expired elements.
 func (c *MemoryCache[K, V]) Clear() {
 	var now = c.getTimestamp()
 	for _, b := range c.storage {
@@ -122,7 +124,9 @@ func (c *MemoryCache[K, V]) Stop() {
 	c.once.Do(func() {
 		c.cancel()
 		c.wg.Wait()
-		_ = c.q.Stop(context.Background())
+		if c.q != nil {
+			_ = c.q.Stop(context.Background())
+		}
 	})
 }
 
@@ -172,10 +176,10 @@ func (c *MemoryCache[K, V]) Set(key K, value V, exp time.Duration) (exist bool) 
 	return false
 }
 
-// SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会异步触发回调.
-// 回调在独立任务队列中执行, 收到的 Element 为快照而非缓存内活跃引用.
-// Set the key value, expiration time and callback function. Callbacks are dispatched asynchronously on capacity overflow or expiration.
-// The Element passed to the callback is a snapshot, not a live cache reference.
+// SetWithCallback 设置键值, 过期时间和回调函数. 容量溢出和过期都会触发回调.
+// 默认异步执行; 同步模式下回调在桶锁内执行, 收到的 Element 为活跃引用, 勿在回调中操作 MemoryCache 以免死锁.
+// Set the key value, expiration time and callback function. Callbacks are triggered on capacity overflow or expiration.
+// Async by default; in sync mode the callback runs under the bucket lock with a live Element reference — do not call back into MemoryCache to avoid deadlocks.
 func (c *MemoryCache[K, V]) SetWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (exist bool) {
 	hashcode := c.hasher.Hash(key)
 	b := c.storage[hashcode&c.bucketMask]
@@ -347,9 +351,9 @@ func (c *MemoryCache[K, V]) GetOrCreate(key K, value V, exp time.Duration) (v V,
 }
 
 // GetOrCreateWithCallback 如果存在, 返回已有值(忽略 value 和 cb 参数)并刷新过期时间. 如果不存在, 创建一个新的.
-// 回调异步执行, Element 为快照.
+// 回调默认可通过 WithAsyncCallback 配置; 异步模式下 Element 为快照.
 // Get or create a value with CallbackFunc. If it exists, returns the existing value (ignoring the value and cb parameters) and refreshes the expiration time. If it does not exist, creates a new one.
-// Callbacks are dispatched asynchronously; the Element is a snapshot.
+// Callback dispatch is configurable via WithAsyncCallback; in async mode the Element is a snapshot.
 func (c *MemoryCache[K, V]) GetOrCreateWithCallback(key K, value V, exp time.Duration, cb CallbackFunc[*Element[K, V]]) (v V, exist bool) {
 	hashcode := c.hasher.Hash(key)
 	b := c.storage[hashcode&c.bucketMask]
@@ -484,10 +488,14 @@ func (c *bucket[K, V]) invokeCallback(ele *Element[K, V], reason Reason) {
 	if ele.cb == nil {
 		return
 	}
-	payload := callbackPayload[K, V]{ele: *ele, reason: reason, cb: ele.cb}
-	c.q.Push(func() {
-		payload.cb(&payload.ele, payload.reason)
-	}, int64(ele.hashcode))
+	if c.conf.AsyncCallback {
+		payload := callbackPayload[K, V]{ele: *ele, reason: reason, cb: ele.cb}
+		c.q.Push(func() {
+			payload.cb(&payload.ele, payload.reason)
+		}, int64(ele.hashcode))
+		return
+	}
+	ele.cb(ele, reason)
 }
 
 func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
