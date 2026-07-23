@@ -649,15 +649,29 @@ func TestMemoryCache_GetOrCreateWithCallback(t *testing.T) {
 }
 
 func TestMemoryCache_Stop(t *testing.T) {
-	var mc = New[string, any]()
-	mc.Stop()
-	mc.Stop()
+	t.Run("idempotent", func(t *testing.T) {
+		var mc = New[string, any]()
+		mc.Stop()
+		mc.Stop()
 
-	select {
-	case <-mc.ctx.Done():
-	default:
-		t.Fail()
-	}
+		select {
+		case <-mc.ctx.Done():
+		default:
+			t.Fail()
+		}
+		assert.True(t, mc.stopped.Load())
+	})
+
+	t.Run("callback after stop is not dropped", func(t *testing.T) {
+		var mc = New[string, any](WithAsyncCallback(true))
+		var got Reason
+		mc.SetWithCallback("key", 1, -1, func(ele *Element[string, any], reason Reason) {
+			got = reason
+		})
+		mc.Stop()
+		assert.True(t, mc.Delete("key"))
+		assert.Equal(t, ReasonDeleted, got)
+	})
 }
 
 func TestMemoryCache_Range(t *testing.T) {
@@ -954,6 +968,27 @@ func TestUpdateTTL(t *testing.T) {
 		v, getOk := mc.Get("key1")
 		assert.True(t, getOk)
 		assert.Equal(t, "value1", v)
+	})
+
+	t.Run("same ttl still refreshes lru", func(t *testing.T) {
+		var mc = New[string, any](
+			WithBucketNum(1),
+			WithBucketSize(0, 2),
+			WithCachedTime(true),
+		)
+		defer mc.Stop()
+
+		mc.Set("a", 1, time.Hour)
+		mc.Set("b", 1, time.Hour)
+		// CachedTime 下同秒内 ExpireAt 相同, 仍应 bump LRU, 使 a 变为 MRU
+		_, ok := mc.GetWithTTL("a", time.Hour)
+		assert.True(t, ok)
+		mc.Set("c", 1, time.Hour)
+
+		keys := getKeys(mc)
+		assert.ElementsMatch(t, []string{"a", "c"}, keys)
+		_, exist := mc.Get("b")
+		assert.False(t, exist)
 	})
 }
 

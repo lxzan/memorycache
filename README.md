@@ -53,7 +53,7 @@ Minimalist in-memory KV storage, powered by `HashMap` and `Minimal Quad Heap`.
 - [x] **Clear** : Clear all caches. Triggers `ReasonCleared` callback for alive non-expired elements.
 - [x] **Range** : Iterate all key-value pairs in the cache.
 - [x] **Len** : Get the current number of cached elements (may include expired but un-cleaned elements).
-- [x] **Stop** : Stop the background goroutines, drain pending callbacks, and release resources.
+- [x] **Stop** : Stop the background goroutines, drain pending callbacks, and release resources. Do not use the instance after `Stop`.
 
 ### Callbacks
 
@@ -66,7 +66,7 @@ Callbacks registered via `SetWithCallback` or `GetOrCreateWithCallback` are trig
 - The `*Element` is a **snapshot** copied before the entry is recycled.
 - Delivery is **best-effort and unordered** across keys; same hash shard is serialized (concurrency=1 per shard).
 - Panics are recovered and logged (`WithRecovery`).
-- `Stop()` drains pending callbacks (up to 30s timeout).
+- `Stop()` drains pending callbacks (up to 30s timeout). After `Stop`, further mutations (if any) run callbacks **synchronously** so they are not silently dropped.
 
 **Sync mode** (`WithAsyncCallback(false)`):
 

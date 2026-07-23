@@ -24,6 +24,7 @@ type MemoryCache[K comparable, V any] struct {
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
 	once       sync.Once
+	stopped    atomic.Bool
 }
 
 // New 创建缓存数据库实例
@@ -50,7 +51,7 @@ func New[K comparable, V any](options ...Option) *MemoryCache[K, V] {
 	mc.timestamp.Store(time.Now().UnixMilli())
 
 	for i := range mc.storage {
-		b := (&bucket[K, V]{conf: conf, q: mc.q}).init()
+		b := (&bucket[K, V]{conf: conf, q: mc.q, stopped: &mc.stopped}).init()
 		mc.storage[i] = b
 	}
 
@@ -120,8 +121,13 @@ func (c *MemoryCache[K, V]) Clear() {
 	}
 }
 
+// Stop 停止后台协程并排空待执行回调. Stop 之后不应再使用该实例;
+// 若仍发生删除/清空等操作, 异步回调会降级为同步执行, 避免静默丢失.
+// Stop background goroutines and drain pending callbacks. Do not use the instance after Stop;
+// if mutations still occur, async callbacks fall back to synchronous execution to avoid silent loss.
 func (c *MemoryCache[K, V]) Stop() {
 	c.once.Do(func() {
+		c.stopped.Store(true)
 		c.cancel()
 		c.wg.Wait()
 		if c.q != nil {
@@ -453,11 +459,12 @@ func (c *MemoryCache[K, V]) Len() int {
 
 type bucket[K comparable, V any] struct {
 	sync.Mutex
-	conf *config
-	q    queues.Queue
-	Map  containers.Map[uint64, pointer]
-	Heap *heap[K, V]
-	List *deque[K, V]
+	conf    *config
+	q       queues.Queue
+	stopped *atomic.Bool
+	Map     containers.Map[uint64, pointer]
+	Heap    *heap[K, V]
+	List    *deque[K, V]
 }
 
 func (c *bucket[K, V]) init() *bucket[K, V] {
@@ -488,7 +495,8 @@ func (c *bucket[K, V]) invokeCallback(ele *Element[K, V], reason Reason) {
 	if ele.cb == nil {
 		return
 	}
-	if c.conf.AsyncCallback {
+	// 异步且未 Stop: 入队; Stop 后队列已关闭, 降级为同步以免回调丢失.
+	if c.conf.AsyncCallback && c.q != nil && !c.stopped.Load() {
 		payload := callbackPayload[K, V]{ele: *ele, reason: reason, cb: ele.cb}
 		c.q.Push(func() {
 			payload.cb(&payload.ele, payload.reason)
@@ -506,10 +514,10 @@ func (c *bucket[K, V]) Delete(ele *Element[K, V], reason Reason) {
 }
 
 func (c *bucket[K, V]) UpdateTTL(ele *Element[K, V], expireAt int64) {
-	if ele.ExpireAt == expireAt {
-		return
+	if ele.ExpireAt != expireAt {
+		c.Heap.UpdateTTL(ele, expireAt)
 	}
-	c.Heap.UpdateTTL(ele, expireAt)
+	// TTL 未变时仍刷新 LRU, 避免 CachedTime 下同秒内访问不 bump 导致热点被误驱逐.
 	c.List.MoveToBack(ele.addr)
 }
 
