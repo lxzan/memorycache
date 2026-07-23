@@ -7,8 +7,8 @@ github.com/dolthub/swiss v0.2.1/go.mod h1:8AhKZZ1HK7g18j7v7k6c5cYIGEZJcPn0ARsai8
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
-github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
 github.com/lxzan/concurrency v1.4.3 h1:rqy+PY8aMyaHO/K384EE1mf1WWTO5mBYj/TGSzUEHxk=
 github.com/lxzan/concurrency v1.4.3/go.mod h1:40ffys2wHpbUHtNztACL0xnjVkRLJ5Ej6b0EDzZVNdo=
 github.com/lxzan/dao v1.1.12 h1:TMvCwhFVzZV6c9upFxXXoiPD5wDKIYgzIYoC5KE//yc=
